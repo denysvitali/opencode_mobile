@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart' as md;
 import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter_highlight/themes/github.dart';
-import 'package:flutter_highlight/themes/github-dark.dart';
 
-import '../../core/models/message.dart';
+import '../../../core/models/message.dart';
 import 'tool_card.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -199,7 +199,7 @@ class _CodeBlockView extends StatelessWidget {
             language: language,
             theme: isUser
                 ? {}
-                : (isDark ? githubDarkTheme : githubTheme),
+                : (isDark ? atomOneDarkTheme : githubTheme),
             padding: const EdgeInsets.all(12),
             textStyle: TextStyle(
               fontSize: 13,

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/models/message.dart';
+import '../../../core/models/message.dart';
 
 class ToolCard extends StatelessWidget {
   final MessagePart part;

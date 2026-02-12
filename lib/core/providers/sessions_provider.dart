@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart';
 
 import '../api/opencode_client.dart';
 import '../models/session.dart';
@@ -28,10 +27,11 @@ class SessionsState {
   }
 }
 
-class SessionsNotifier extends StateNotifier<SessionsState> {
-  final Ref _ref;
-
-  SessionsNotifier(this._ref) : super(SessionsState());
+class SessionsNotifier extends Notifier<SessionsState> {
+  @override
+  SessionsState build() {
+    return SessionsState();
+  }
 
   Future<void> loadSessions({String? directory}) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -86,7 +86,6 @@ class SessionsNotifier extends StateNotifier<SessionsState> {
   }
 }
 
-final sessionsProvider =
-    StateNotifierProvider<SessionsNotifier, SessionsState>((ref) {
-  return SessionsNotifier(ref);
-});
+final sessionsProvider = NotifierProvider<SessionsNotifier, SessionsState>(
+  SessionsNotifier.new,
+);

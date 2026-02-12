@@ -52,12 +52,12 @@ class AppTheme {
           color: textPrimary,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: const CardTheme(
         color: cardLight,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: borderLight),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: borderLight),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -130,12 +130,12 @@ class AppTheme {
           color: textPrimaryDark,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: const CardTheme(
         color: cardDark,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: borderDark),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          side: BorderSide(color: borderDark),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(

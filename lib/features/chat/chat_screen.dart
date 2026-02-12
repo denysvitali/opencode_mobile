@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/chat_provider.dart';
-import '../../core/providers/sse_message_provider.dart';
+import '../../core/models/message.dart';
 import 'widgets/message_list.dart';
 import 'widgets/message_input.dart';
 
@@ -51,9 +51,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider(widget.sessionId));
 
-    ref.listen<Message>(sseMessageProvider, (previous, next) {
-      if (next.sessionId == widget.sessionId) {
-        ref.read(chatProvider(widget.sessionId).notifier).updateMessage(next);
+    ref.listen<AsyncValue<Message>>(sseMessageProvider, (previous, next) {
+      final message = next.valueOrNull;
+      if (message != null && message.sessionId == widget.sessionId) {
+        ref.read(chatProvider(widget.sessionId).notifier).updateMessage(message);
         _scrollToBottom();
       }
     });

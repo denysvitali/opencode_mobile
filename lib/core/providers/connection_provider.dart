@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart';
 
 import '../api/opencode_client.dart';
 import '../api/sse_client.dart';
@@ -44,10 +43,11 @@ class ConnectionState {
   bool get hasError => status == ConnectionStatus.error;
 }
 
-class ConnectionNotifier extends StateNotifier<ConnectionState> {
-  final Ref _ref;
-
-  ConnectionNotifier(this._ref) : super(ConnectionState());
+class ConnectionNotifier extends Notifier<ConnectionState> {
+  @override
+  ConnectionState build() {
+    return ConnectionState();
+  }
 
   Future<void> loadConfig() async {
     final config = await StorageService().loadServerConfig();
@@ -109,10 +109,9 @@ class ConnectionNotifier extends StateNotifier<ConnectionState> {
   }
 }
 
-final connectionProvider =
-    StateNotifierProvider<ConnectionNotifier, ConnectionState>((ref) {
-  return ConnectionNotifier(ref);
-});
+final connectionProvider = NotifierProvider<ConnectionNotifier, ConnectionState>(
+  ConnectionNotifier.new,
+);
 
 final sseStatusProvider = StreamProvider<SSEConnectionStatus>((ref) {
   return SSEClient().statusStream;
