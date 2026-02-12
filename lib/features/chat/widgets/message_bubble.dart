@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_markdown/flutter_markdown.dart' as md;
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
@@ -198,7 +199,7 @@ class _CodeBlockView extends StatelessWidget {
             code,
             language: language,
             theme: isUser
-                ? null
+                ? const {}
                 : (isDark ? atomOneDarkTheme : githubTheme),
             padding: const EdgeInsets.all(12),
             textStyle: TextStyle(

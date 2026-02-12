@@ -63,7 +63,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(
         title: const Text('Chat'),
         actions: [
-          if (chatState.isStreaming)
+          if (chatState.value?.isStreaming ?? false)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: SizedBox(
@@ -80,13 +80,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: chatState.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : MessageList(
-                    messages: chatState.messages,
+                    messages: chatState.value?.messages ?? [],
                     scrollController: _scrollController,
                   ),
           ),
           MessageInput(
             onSend: _sendMessage,
-            isLoading: chatState.isStreaming,
+            isLoading: chatState.value?.isStreaming ?? false,
           ),
         ],
       ),

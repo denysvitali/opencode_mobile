@@ -20,10 +20,10 @@ class ConnectionState {
 
   ConnectionState({
     this.status = ConnectionStatus.disconnected,
-    this.config = const ServerConfig(),
+    ServerConfig? config,
     this.errorMessage,
     this.serverVersion,
-  });
+  }) : config = config ?? ServerConfig();
 
   ConnectionState copyWith({
     ConnectionStatus? status,
