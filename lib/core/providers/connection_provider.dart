@@ -34,7 +34,7 @@ class ConnectionState {
     return ConnectionState(
       status: status ?? this.status,
       config: config ?? this.config,
-      errorMessage: errorMessage,
+      errorMessage: errorMessage ?? this.errorMessage,
       serverVersion: serverVersion ?? this.serverVersion,
     );
   }

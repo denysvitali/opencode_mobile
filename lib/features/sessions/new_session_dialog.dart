@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/api/opencode_client.dart';
 import '../../core/models/session.dart';
+import '../../core/providers/sessions_provider.dart';
 
 class NewSessionDialog extends StatefulWidget {
-  const NewSessionDialog({super.key});
+  final WidgetRef ref;
+
+  const NewSessionDialog({super.key, required this.ref});
 
   @override
   State<NewSessionDialog> createState() => _NewSessionDialogState();
@@ -24,7 +27,7 @@ class _NewSessionDialogState extends State<NewSessionDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final session = await OpenCodeClient().createSession(
+      final session = await widget.ref.read(sessionsProvider.notifier).createSession(
         title: _titleController.text.trim().isNotEmpty
             ? _titleController.text.trim()
             : null,

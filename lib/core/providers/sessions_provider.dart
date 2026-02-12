@@ -22,7 +22,7 @@ class SessionsState {
     return SessionsState(
       sessions: sessions ?? this.sessions,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
+      error: error ?? this.error,
     );
   }
 }

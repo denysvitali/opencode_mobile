@@ -38,6 +38,7 @@ class MessageList extends StatelessWidget {
     }
 
     return ListView.builder(
+      reverse: true,
       controller: scrollController,
       padding: const EdgeInsets.all(16),
       itemCount: messages.length,

@@ -31,7 +31,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
   Future<void> _createSession() async {
     final session = await showDialog<Session>(
       context: context,
-      builder: (context) => const NewSessionDialog(),
+      builder: (context) => NewSessionDialog(ref: ref),
     );
 
     if (session != null && mounted) {

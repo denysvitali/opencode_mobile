@@ -30,18 +30,18 @@ class ChatState {
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       isStreaming: isStreaming ?? this.isStreaming,
-      error: error,
-      currentMessageId: currentMessageId,
+      error: error ?? this.error,
+      currentMessageId: currentMessageId ?? this.currentMessageId,
     );
   }
 }
 
 class ChatNotifier extends AsyncNotifier<ChatState> {
-  String sessionId = '';
+  late final String sessionId;
 
   @override
   Future<ChatState> build() async {
-    sessionId = ref.watch(chatSessionIdProvider);
+    // sessionId is set when the family provider creates this notifier
     if (sessionId.isNotEmpty) {
       final messages = await OpenCodeClient().getMessages(sessionId);
       return ChatState(messages: messages);
@@ -125,7 +125,11 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
 
 final chatSessionIdProvider = StateProvider<String>((ref) => '');
 
-final chatProvider = AsyncNotifierProvider<ChatNotifier, ChatState>(ChatNotifier.new);
+final chatProvider = AsyncNotifierProvider.family<ChatNotifier, ChatState, String>((ref, sessionId) {
+  final notifier = ChatNotifier();
+  notifier.sessionId = sessionId;
+  return notifier;
+});
 
 final sseMessageProvider = StreamProvider<Message>((ref) {
   return SSEClient().messageUpdateStream;

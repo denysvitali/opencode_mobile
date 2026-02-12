@@ -198,7 +198,7 @@ class _CodeBlockView extends StatelessWidget {
             code,
             language: language,
             theme: isUser
-                ? {}
+                ? null
                 : (isDark ? atomOneDarkTheme : githubTheme),
             padding: const EdgeInsets.all(12),
             textStyle: TextStyle(

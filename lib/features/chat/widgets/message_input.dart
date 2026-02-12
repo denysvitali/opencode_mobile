@@ -64,6 +64,7 @@ class _MessageInputState extends State<MessageInput> {
           Expanded(
             child: TextField(
               controller: _controller,
+              enabled: !widget.isLoading,
               decoration: const InputDecoration(
                 hintText: 'Type a message...',
                 border: InputBorder.none,
@@ -88,7 +89,7 @@ class _MessageInputState extends State<MessageInput> {
                     Icons.send,
                     color: _hasText && !widget.isLoading
                         ? Theme.of(context).colorScheme.primary
-                        : null,
+                        : Colors.grey.shade400,
                   ),
           ),
         ],

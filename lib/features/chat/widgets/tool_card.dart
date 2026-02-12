@@ -62,7 +62,9 @@ class ToolCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            state,
+                            part.toolState?.isNotEmpty == true
+                                ? part.toolState![0].toUpperCase() + part.toolState!.substring(1)
+                                : state,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: stateColor,
                             ),
@@ -94,7 +96,7 @@ class ToolCard extends StatelessWidget {
             _ExpandableSection(
               title: 'Output',
               content: output,
-              icon: Icons.output,
+              icon: Icons.terminal,
             ),
           ],
         ],
@@ -119,7 +121,7 @@ class ToolCard extends StatelessWidget {
     return switch (state) {
       'pending' => Colors.orange,
       'running' => Colors.blue,
-      'completed' => Colors.green,
+      'completed' || 'success' => Colors.green,
       'error' => Theme.of(context).colorScheme.error,
       _ => Colors.grey,
     };
