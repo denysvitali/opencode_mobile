@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart';
 
 import '../api/opencode_client.dart';
 import '../api/sse_client.dart';
@@ -37,11 +36,13 @@ class ChatState {
   }
 }
 
-class ChatNotifier extends StateNotifier<ChatState> {
-  final Ref _ref;
-  final String sessionId;
+class ChatNotifier extends Notifier<ChatState> {
+  late final String sessionId;
 
-  ChatNotifier(this._ref, this.sessionId) : super(ChatState());
+  @override
+  ChatState build() {
+    return ChatState();
+  }
 
   Future<void> loadMessages({String? directory}) async {
     state = state.copyWith(isLoading: true, error: null);
@@ -107,9 +108,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 }
 
-final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, String>(
-  (ref, sessionId) => ChatNotifier(ref, sessionId),
-);
+final chatProvider = NotifierProvider.family<ChatNotifier, ChatState, String>((ref, sessionId) {
+  final notifier = ChatNotifier();
+  notifier.sessionId = sessionId;
+  return notifier;
+});
 
 final sseMessageProvider = StreamProvider<Message>((ref) {
   return SSEClient().messageUpdateStream;

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_markdown/flutter_markdown.dart' as md;
-import 'package:markdown/markdown.dart' as md_pkg;
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter_highlight/themes/github.dart';
@@ -141,7 +140,7 @@ class _CodeBlockBuilder extends MarkdownElementBuilder {
   _CodeBlockBuilder(this.isUser);
 
   @override
-  Widget? visitElementAfter(md_pkg.Element element, TextStyle? preferredStyle) {
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
     final language = element.attributes['class']?.replaceFirst('language-', '') ?? 'plaintext';
     final code = element.textContent;
 

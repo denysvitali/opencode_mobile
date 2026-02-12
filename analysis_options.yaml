@@ -46,7 +46,6 @@ linter:
     - file_names
     - hash_and_equals
     - implementation_imports
-    - iterable_contains_unrelated_type
     - leading_newlines_in_multiline_strings
     - library_names
     - library_prefixes

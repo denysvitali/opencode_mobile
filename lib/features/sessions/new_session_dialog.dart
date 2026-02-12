@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/models/session.dart';
 import '../../core/providers/sessions_provider.dart';
 
 class NewSessionDialog extends StatefulWidget {

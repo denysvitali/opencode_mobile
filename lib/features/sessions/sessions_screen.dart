@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/session.dart';
-import '../../core/providers/connection_provider.dart';
 import '../../core/providers/sessions_provider.dart';
 import 'new_session_dialog.dart';
 
