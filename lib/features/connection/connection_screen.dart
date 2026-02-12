@@ -17,11 +17,13 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isConnecting = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final config = ref.read(connectionProvider).config;
       _urlController.text = config.url;
       _usernameController.text = config.username ?? '';
@@ -37,31 +39,86 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
     super.dispose();
   }
 
+  String? _validateUrl(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Please enter a server URL';
+    }
+
+    final trimmedUrl = value.trim();
+
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+      return 'URL must start with http:// or https://';
+    }
+
+    // Validate proper URL format
+    try {
+      final uri = Uri.parse(trimmedUrl);
+      if (!uri.hasScheme || !uri.hasAuthority) {
+        return 'Please enter a valid URL';
+      }
+      if (uri.host.isEmpty) {
+        return 'Please enter a valid hostname';
+      }
+    } catch (e) {
+      return 'Please enter a valid URL';
+    }
+
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    final username = _usernameController.text.trim();
+    final password = value?.trim() ?? '';
+
+    // If username is provided but password is empty, show a warning
+    if (username.isNotEmpty && password.isEmpty) {
+      return 'Password is required when username is provided';
+    }
+
+    return null;
+  }
+
   Future<void> _connect() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final config = ref.read(connectionProvider).config.copyWith(
-      url: _urlController.text.trim(),
-      username: _usernameController.text.trim().isNotEmpty
-          ? _usernameController.text.trim()
-          : null,
-      password: _passwordController.text.isNotEmpty
-          ? _passwordController.text
-          : null,
-    );
+    // Clear any previous error before connecting
+    ref.read(connectionProvider.notifier).clearError();
 
-    final success = await ref.read(connectionProvider.notifier).connect(
-      newConfig: config,
-    );
+    setState(() {
+      _isConnecting = true;
+    });
 
-    if (success && mounted) {
-      context.go('/sessions');
+    try {
+      final config = ref.read(connectionProvider).config.copyWith(
+        url: _urlController.text.trim(),
+        username: _usernameController.text.trim().isNotEmpty
+            ? _usernameController.text.trim()
+            : null,
+        password: _passwordController.text.trim().isNotEmpty
+            ? _passwordController.text.trim()
+            : null,
+      );
+
+      final success = await ref.read(connectionProvider.notifier).connect(
+        newConfig: config,
+      );
+
+      if (success && mounted) {
+        context.go('/sessions');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final connectionState = ref.watch(connectionProvider);
+    final isConnecting = _isConnecting || connectionState.status == ConnectionStatus.connecting;
 
     return Scaffold(
       body: SafeArea(
@@ -106,15 +163,9 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                         prefixIcon: Icon(Icons.link),
                       ),
                       keyboardType: TextInputType.url,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a server URL';
-                        }
-                        if (!value.startsWith('http://') && !value.startsWith('https://')) {
-                          return 'URL must start with http:// or https://';
-                        }
-                        return null;
-                      },
+                      textInputAction: TextInputAction.next,
+                      validator: _validateUrl,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -123,6 +174,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                         labelText: 'Username (optional)',
                         prefixIcon: Icon(Icons.person),
                       ),
+                      textInputAction: TextInputAction.next,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -142,13 +194,17 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                         ),
                       ),
                       obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _connect(),
+                      validator: _validatePassword,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
                     ),
                     const SizedBox(height: 24),
-                    if (connectionState.status == ConnectionStatus.connecting)
+                    if (isConnecting)
                       const Center(child: CircularProgressIndicator())
                     else
                       ElevatedButton(
-                        onPressed: _connect,
+                        onPressed: isConnecting ? null : _connect,
                         child: const Text('Connect'),
                       ),
                     if (connectionState.hasError) ...[
