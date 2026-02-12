@@ -51,19 +51,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider(widget.sessionId));
 
-    ref.listen<AsyncValue<Message>>(sseMessageProvider, (previous, next) {
-      final message = next.valueOrNull;
-      if (message != null && message.sessionId == widget.sessionId) {
-        ref.read(chatProvider(widget.sessionId).notifier).updateMessage(message);
-        _scrollToBottom();
-      }
+    ref.listen(sseMessageProvider, (previous, next) {
+      next.when(
+        data: (message) {
+          if (message.sessionId == widget.sessionId) {
+            ref.read(chatProvider(widget.sessionId).notifier).updateMessage(message);
+            _scrollToBottom();
+          }
+        },
+        loading: () {},
+        error: (_, __) {},
+      );
     });
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chat'),
         actions: [
-          if (chatState.value?.isStreaming ?? false)
+          if (chatState.isStreaming)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: SizedBox(
@@ -80,13 +85,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             child: chatState.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : MessageList(
-                    messages: chatState.value?.messages ?? [],
+                    messages: chatState.messages,
                     scrollController: _scrollController,
                   ),
           ),
           MessageInput(
             onSend: _sendMessage,
-            isLoading: chatState.value?.isStreaming ?? false,
+            isLoading: chatState.isStreaming,
           ),
         ],
       ),

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:state_notifier/state_notifier.dart';
 
 import '../api/opencode_client.dart';
 import '../api/sse_client.dart';
@@ -36,44 +37,37 @@ class ChatState {
   }
 }
 
-class ChatNotifier extends AsyncNotifier<ChatState> {
-  late final String sessionId;
+class ChatNotifier extends StateNotifier<ChatState> {
+  final Ref _ref;
+  final String sessionId;
 
-  @override
-  Future<ChatState> build() async {
-    // sessionId is set when the family provider creates this notifier
-    if (sessionId.isNotEmpty) {
-      final messages = await OpenCodeClient().getMessages(sessionId);
-      return ChatState(messages: messages);
-    }
-    return ChatState();
-  }
+  ChatNotifier(this._ref, this.sessionId) : super(ChatState());
 
   Future<void> loadMessages({String? directory}) async {
-    state = const AsyncLoading();
+    state = state.copyWith(isLoading: true, error: null);
+
     try {
       final messages = await OpenCodeClient().getMessages(sessionId, directory: directory);
-      state = AsyncData(ChatState(messages: messages));
-    } catch (e, st) {
-      state = AsyncError(e, st);
+      state = state.copyWith(messages: messages, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
   Future<void> sendMessage(String text, {String? directory}) async {
     if (text.trim().isEmpty) return;
 
-    final currentState = state.valueOrNull ?? ChatState();
     final userMessage = Message(
       sessionId: sessionId,
       role: MessageRole.user,
       parts: [MessagePart(type: MessagePartType.text, text: text)],
     );
 
-    state = AsyncData(currentState.copyWith(
-      messages: [...currentState.messages, userMessage],
+    state = state.copyWith(
+      messages: [...state.messages, userMessage],
       isStreaming: true,
       error: null,
-    ));
+    );
 
     try {
       final response = await OpenCodeClient().sendMessage(
@@ -82,54 +76,40 @@ class ChatNotifier extends AsyncNotifier<ChatState> {
         directory: directory,
       );
 
-      final newState = state.valueOrNull ?? ChatState();
-      state = AsyncData(newState.copyWith(
-        messages: [...newState.messages, response],
+      state = state.copyWith(
+        messages: [...state.messages, response],
         isStreaming: false,
         currentMessageId: response.id,
-      ));
-    } catch (e, st) {
-      final newState = state.valueOrNull ?? ChatState();
-      state = AsyncData(newState.copyWith(
+      );
+    } catch (e) {
+      state = state.copyWith(
         isStreaming: false,
         error: e.toString(),
-      ));
+      );
     }
   }
 
   void updateMessage(Message updated) {
     if (updated.sessionId != sessionId) return;
-    
-    final currentState = state.valueOrNull;
-    if (currentState == null) return;
 
-    final index = currentState.messages.indexWhere((m) => m.id == updated.id);
+    final index = state.messages.indexWhere((m) => m.id == updated.id);
     if (index != -1) {
-      final newMessages = List<Message>.from(currentState.messages);
+      final newMessages = List<Message>.from(state.messages);
       newMessages[index] = updated;
-      state = AsyncData(currentState.copyWith(messages: newMessages));
+      state = state.copyWith(messages: newMessages);
     } else {
-      state = AsyncData(currentState.copyWith(
-        messages: [...currentState.messages, updated],
-      ));
+      state = state.copyWith(messages: [...state.messages, updated]);
     }
   }
 
   void clearError() {
-    final currentState = state.valueOrNull;
-    if (currentState != null) {
-      state = AsyncData(currentState.copyWith(error: null));
-    }
+    state = state.copyWith(error: null);
   }
 }
 
-final chatSessionIdProvider = StateProvider<String>((ref) => '');
-
-final chatProvider = AsyncNotifierProvider.family<ChatNotifier, ChatState, String>((ref, sessionId) {
-  final notifier = ChatNotifier();
-  notifier.sessionId = sessionId;
-  return notifier;
-});
+final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, String>(
+  (ref, sessionId) => ChatNotifier(ref, sessionId),
+);
 
 final sseMessageProvider = StreamProvider<Message>((ref) {
   return SSEClient().messageUpdateStream;
