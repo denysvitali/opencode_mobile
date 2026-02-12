@@ -108,11 +108,13 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 }
 
-final chatProvider = NotifierProvider.family<ChatNotifier, ChatState, String>((ref, sessionId) {
-  final notifier = ChatNotifier();
-  notifier.sessionId = sessionId;
-  return notifier;
-});
+final chatProvider = NotifierProvider.family<ChatNotifier, ChatState, String>(
+  (Ref ref, String sessionId) {
+    final notifier = ChatNotifier();
+    notifier.sessionId = sessionId;
+    return notifier;
+  },
+);
 
 final sseMessageProvider = StreamProvider<Message>((ref) {
   return SSEClient().messageUpdateStream;
