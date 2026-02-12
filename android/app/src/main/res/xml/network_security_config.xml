@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Trust user-installed CA certificates for development -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- System CAs -->
+            <certificates src="system" />
+            <!-- User-installed CAs -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
