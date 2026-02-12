@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:state_notifier/state_notifier.dart';
 
 import '../api/opencode_client.dart';
 import '../api/sse_client.dart';
@@ -37,12 +36,13 @@ class ChatState {
   }
 }
 
-class ChatNotifier extends StateNotifier<ChatState> {
-  final String sessionId;
+class ChatNotifier extends Notifier<ChatState> {
+  @override
+  ChatState build() {
+    return ChatState();
+  }
 
-  ChatNotifier(this.sessionId) : super(ChatState());
-
-  Future<void> loadMessages({String? directory}) async {
+  Future<void> loadMessages(String sessionId, {String? directory}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
@@ -53,7 +53,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     }
   }
 
-  Future<void> sendMessage(String text, {String? directory}) async {
+  Future<void> sendMessage(String sessionId, String text, {String? directory}) async {
     if (text.trim().isEmpty) return;
 
     final userMessage = Message(
@@ -89,8 +89,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 
   void updateMessage(Message updated) {
-    if (updated.sessionId != sessionId) return;
-
     final index = state.messages.indexWhere((m) => m.id == updated.id);
     if (index != -1) {
       final newMessages = List<Message>.from(state.messages);
@@ -106,9 +104,11 @@ class ChatNotifier extends StateNotifier<ChatState> {
   }
 }
 
-final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, String>(
-  (ref, sessionId) => ChatNotifier(sessionId),
-);
+final chatProvider = NotifierProvider<ChatNotifier, ChatState>(ChatNotifier.new);
+
+final chatProviderFamily = Provider.family<ChatNotifier, String>((ref, sessionId) {
+  throw UnimplementedError('Use chatProvider instead with sessionId in method calls');
+});
 
 final sseMessageProvider = StreamProvider<Message>((ref) {
   return SSEClient().messageUpdateStream;

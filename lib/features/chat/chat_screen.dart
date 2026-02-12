@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/chat_provider.dart';
-import '../../core/models/message.dart';
 import 'widgets/message_list.dart';
 import 'widgets/message_input.dart';
 
@@ -22,7 +21,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(chatProvider(widget.sessionId).notifier).loadMessages();
+      ref.read(chatProvider.notifier).loadMessages(widget.sessionId);
     });
   }
 
@@ -43,19 +42,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _sendMessage(String text) async {
-    await ref.read(chatProvider(widget.sessionId).notifier).sendMessage(text);
+    await ref.read(chatProvider.notifier).sendMessage(widget.sessionId, text);
     _scrollToBottom();
   }
 
   @override
   Widget build(BuildContext context) {
-    final chatState = ref.watch(chatProvider(widget.sessionId));
+    final chatState = ref.watch(chatProvider);
 
     ref.listen(sseMessageProvider, (previous, next) {
       next.when(
         data: (message) {
           if (message.sessionId == widget.sessionId) {
-            ref.read(chatProvider(widget.sessionId).notifier).updateMessage(message);
+            ref.read(chatProvider.notifier).updateMessage(message);
             _scrollToBottom();
           }
         },
