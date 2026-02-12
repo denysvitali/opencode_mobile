@@ -13,6 +13,7 @@ analyzer:
     prefer_const_constructors: warning
     prefer_const_declarations: warning
     avoid_print: warning
+    depend_on_referenced_packages: warning
 
   strong-mode:
     implicit-casts: false
