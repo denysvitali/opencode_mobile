@@ -36,8 +36,15 @@ class ChatState {
   }
 }
 
+// Simple ChatNotifier that receives sessionId in constructor
 class ChatNotifier extends Notifier<ChatState> {
-  late final String sessionId;
+  late final String _sessionId;
+
+  void init(String sessionId) {
+    _sessionId = sessionId;
+  }
+
+  String get sessionId => _sessionId;
 
   @override
   ChatState build() {
@@ -48,7 +55,7 @@ class ChatNotifier extends Notifier<ChatState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final messages = await OpenCodeClient().getMessages(sessionId, directory: directory);
+      final messages = await OpenCodeClient().getMessages(_sessionId, directory: directory);
       state = state.copyWith(messages: messages, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -59,7 +66,7 @@ class ChatNotifier extends Notifier<ChatState> {
     if (text.trim().isEmpty) return;
 
     final userMessage = Message(
-      sessionId: sessionId,
+      sessionId: _sessionId,
       role: MessageRole.user,
       parts: [MessagePart(type: MessagePartType.text, text: text)],
     );
@@ -72,7 +79,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
     try {
       final response = await OpenCodeClient().sendMessage(
-        sessionId,
+        _sessionId,
         text: text,
         directory: directory,
       );
@@ -91,7 +98,7 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 
   void updateMessage(Message updated) {
-    if (updated.sessionId != sessionId) return;
+    if (updated.sessionId != _sessionId) return;
 
     final index = state.messages.indexWhere((m) => m.id == updated.id);
     if (index != -1) {
@@ -108,13 +115,15 @@ class ChatNotifier extends Notifier<ChatState> {
   }
 }
 
-final chatProvider = NotifierProvider.family<ChatNotifier, ChatState, String>(
-  (Ref ref, String sessionId) {
-    final notifier = ChatNotifier();
-    notifier.sessionId = sessionId;
-    return notifier;
-  },
-);
+// Family provider using a map to store notifiers per sessionId
+final _notifiers = Provider.family<ChatNotifier, String>((ref, sessionId) {
+  final notifier = ChatNotifier();
+  notifier.init(sessionId);
+  return notifier;
+});
+
+// Re-export for easier access
+final chatProvider = _notifiers;
 
 final sseMessageProvider = StreamProvider<Message>((ref) {
   return SSEClient().messageUpdateStream;
