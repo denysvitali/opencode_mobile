@@ -180,15 +180,15 @@ class SettingsScreen extends ConsumerWidget {
                                   : null,
                             ),
                             title: Text(provider.name),
-                            subtitle: provider.isDefault
-                                ? const Text('Default')
+                            subtitle: provider.configured
+                                ? const Text('Configured')
                                 : null,
                             children: provider.models.map((model) {
                               return ListTile(
                                 dense: true,
                                 contentPadding: const EdgeInsets.only(left: 72, right: 16),
-                                title: Text(model),
-                                trailing: provider.isDefault && provider.models.indexOf(model) == 0
+                                title: Text(model.name),
+                                trailing: provider.configured && provider.models.indexOf(model) == 0
                                     ? Chip(
                                         label: const Text('Default'),
                                         labelStyle: const TextStyle(fontSize: 10),

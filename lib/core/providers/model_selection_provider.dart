@@ -48,7 +48,8 @@ final providersProvider =
     FutureProvider.autoDispose<List<models.Provider>>((ref) async {
   final client = OpenCodeClient();
   try {
-    return await client.getConfigProviders();
+    final response = await client.getConfigProviders();
+    return response.providers;
   } catch (_) {
     try {
       return await client.getProviders();

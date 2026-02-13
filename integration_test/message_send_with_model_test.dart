@@ -5,6 +5,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:opencode_mobile/core/api/opencode_client.dart';
 import 'package:opencode_mobile/core/http/http_client.dart';
 import 'package:opencode_mobile/core/models/config.dart';
+import 'package:opencode_mobile/core/models/session.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +40,7 @@ void main() {
     expect(health.healthy, isTrue, reason: 'Server should be healthy: ${health.error}');
 
     print('\n--- Step 2: Create Session ---');
-    final session = await client.createSession(title: 'Default Model Test');
+    final session = await client.createSession(input: SessionCreateInput(title: 'Default Model Test'));
     print('Created session: ${session.id}');
     expect(session.id, isNotEmpty);
 
@@ -94,13 +95,13 @@ void main() {
       (p) => p.models.isNotEmpty,
       orElse: () => throw TestFailure('No provider with models found'),
     );
-    final modelId = provider.models.first;
+    final modelId = provider.models.first.id;
     print('Selected: provider=${provider.id}, model=$modelId');
     expect(provider.id, isNotEmpty);
     expect(modelId, isNotEmpty);
 
     print('\n--- Step 3: Create Session ---');
-    final session = await client.createSession(title: 'Explicit Model Test');
+    final session = await client.createSession(input: SessionCreateInput(title: 'Explicit Model Test'));
     print('Created session: ${session.id}');
     expect(session.id, isNotEmpty);
 

@@ -63,7 +63,7 @@ class ConnectionNotifier extends Notifier<ConnectionState> {
     );
 
     try {
-      await OpenCodeClient().updateConfig(config);
+      OpenCodeClient().setServerConfig(config);
       final health = await OpenCodeClient().healthCheck();
 
       if (health.healthy) {

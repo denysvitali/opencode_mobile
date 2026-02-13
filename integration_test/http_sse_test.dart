@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:opencode_mobile/core/api/opencode_client.dart';
 import 'package:opencode_mobile/core/http/http_client.dart';
 import 'package:opencode_mobile/core/models/config.dart';
+import 'package:opencode_mobile/core/models/session.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -89,7 +90,7 @@ void main() {
     }
 
     print('\n--- Step 3: Create session ---');
-    final session = await client.createSession(title: 'HTTP SSE Test');
+    final session = await client.createSession(input: SessionCreateInput(title: 'HTTP SSE Test'));
     print('Created session: ${session.id}');
 
     try {

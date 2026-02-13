@@ -50,7 +50,7 @@ class SessionsNotifier extends Notifier<SessionsState> {
     try {
       final session = await OpenCodeClient().createSession(
         directory: directory,
-        title: title,
+        input: title != null ? SessionCreateInput(title: title) : null,
       );
       state = state.copyWith(
         sessions: [session, ...state.sessions],

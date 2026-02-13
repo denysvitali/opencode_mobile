@@ -6,6 +6,7 @@ import 'package:opencode_mobile/core/api/opencode_client.dart';
 import 'package:opencode_mobile/core/api/sse_client.dart';
 import 'package:opencode_mobile/core/http/http_client.dart';
 import 'package:opencode_mobile/core/models/config.dart';
+import 'package:opencode_mobile/core/models/session.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -45,7 +46,7 @@ void main() {
     expect(health.healthy, isTrue, reason: 'Server should be healthy: ${health.error}');
 
     print('\n--- Step 2: Create Session ---');
-    final session = await client.createSession(title: 'Debug Test Session');
+    final session = await client.createSession(input: SessionCreateInput(title: 'Debug Test Session'));
     print('Created session: ${session.id}, title: ${session.title}');
     expect(session.id, isNotEmpty);
 

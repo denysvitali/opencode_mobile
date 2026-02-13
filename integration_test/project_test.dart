@@ -42,11 +42,9 @@ void main() {
     final sessions = await client.listSessions();
     if (sessions.isEmpty) return;
 
-    // Verify projectId is parseable (may be null)
     for (final session in sessions) {
-      // projectId is a String? - should not throw
-      if (session.projectId != null) {
-        expect(session.projectId, isNotEmpty,
+      if (session.projectID != null) {
+        expect(session.projectID, isNotEmpty,
             reason: 'Non-null projectId should not be empty');
       }
     }

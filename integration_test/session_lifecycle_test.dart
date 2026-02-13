@@ -4,6 +4,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:opencode_mobile/core/http/http_client.dart';
 import 'package:opencode_mobile/core/api/opencode_client.dart';
 import 'package:opencode_mobile/core/models/config.dart';
+import 'package:opencode_mobile/core/models/session.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -31,8 +32,7 @@ void main() {
 
   testWidgets('session lifecycle: create, send message, get messages, delete',
       (tester) async {
-    // Create session
-    final session = await client.createSession(title: 'Integration Test Session');
+    final session = await client.createSession(input: SessionCreateInput(title: 'Integration Test Session'));
     expect(session.id, isNotEmpty);
 
     try {

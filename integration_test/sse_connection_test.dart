@@ -5,6 +5,7 @@ import 'package:opencode_mobile/core/api/opencode_client.dart';
 import 'package:opencode_mobile/core/api/sse_client.dart';
 import 'package:opencode_mobile/core/http/http_client.dart';
 import 'package:opencode_mobile/core/models/config.dart';
+import 'package:opencode_mobile/core/models/session.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -71,7 +72,7 @@ void main() {
         reason: 'SSE should be connected. Status history: $statusChanges');
 
     print('\n--- Step 3: Create session and send message ---');
-    final session = await client.createSession(title: 'SSE Test Session');
+    final session = await client.createSession(input: SessionCreateInput(title: 'SSE Test Session'));
     print('Created session: ${session.id}');
 
     try {
