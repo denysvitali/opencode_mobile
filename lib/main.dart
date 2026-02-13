@@ -1,10 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../core/providers/connection_provider.dart';
-import '../core/services/storage_service.dart';
-import '../core/utils/theme.dart';
+import 'core/http/http_client.dart';
+import 'core/providers/connection_provider.dart';
+import 'core/services/storage_service.dart';
+import 'core/utils/theme.dart';
 import 'features/connection/connection_screen.dart';
 import 'features/sessions/sessions_screen.dart';
 import 'features/chat/chat_screen.dart';
@@ -12,6 +14,15 @@ import 'features/settings/settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  if (Platform.isAndroid) {
+    await platformHttpClient.initialize();
+    if (platformHttpClient.hasCronetFailed) {
+      debugPrint('WARNING: Cronet failed to load, using fallback HTTP client. '
+          'User CA certificates may not be trusted for REST API.');
+    }
+  }
+  
   await StorageService().initialize();
   runApp(const ProviderScope(child: OpenCodeApp()));
 }

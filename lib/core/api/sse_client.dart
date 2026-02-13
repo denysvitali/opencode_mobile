@@ -51,10 +51,12 @@ class SSEClient {
   SSEClient._();
 
   WebSocketChannel? _channel;
+
   SSEConnectionStatus _status = SSEConnectionStatus.disconnected;
   String? _serverUrl;
   String? _username;
   String? _password;
+  bool _userCaWarningShown = false;
 
   Timer? _reconnectTimer;
   Timer? _pingTimer;
@@ -89,6 +91,15 @@ class SSEClient {
 
   void _connect() {
     if (_serverUrl == null) return;
+
+    if (!_userCaWarningShown) {
+      if (kDebugMode) {
+        print('WARNING: WebSocket uses system default SSL. '
+            'User CA certificates may not be trusted. '
+            'For full user CA support, consider using HTTPS with a publicly trusted certificate.');
+      }
+      _userCaWarningShown = true;
+    }
 
     final wsProtocol = _serverUrl!.startsWith('https') ? 'wss' : 'ws';
     final baseUrl = _serverUrl!.replaceFirst(RegExp(r'^https?://'), '$wsProtocol://');
