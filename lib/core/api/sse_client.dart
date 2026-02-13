@@ -38,20 +38,16 @@ class SSEEvent {
           try {
             final parsed = jsonDecode(dataStr);
             if (parsed is Map<String, dynamic>) {
-              // Check for server's payload format: {"payload":{"type":"...","properties":{}}}
               if (parsed.containsKey('payload') && parsed['payload'] is Map) {
                 final payload = parsed['payload'] as Map<String, dynamic>;
-                // Extract event type from payload.type
                 if (payload.containsKey('type')) {
                   event = payload['type'] as String?;
                 }
-                // Extract properties as data
                 if (payload.containsKey('properties')) {
                   data = payload['properties'] as Map<String, dynamic>;
                 } else {
                   data = payload;
                 }
-                // Also keep the full payload for reference
                 data = parsed;
               } else {
                 data = parsed;
@@ -68,13 +64,22 @@ class SSEEvent {
   }
 }
 
+class _SSEConnection {
+  final String url;
+  final String? directory;
+  http.StreamedResponse? response;
+  StreamSubscription<List<int>>? subscription;
+
+  _SSEConnection({required this.url, this.directory});
+}
+
 class SSEClient {
   static final SSEClient _instance = SSEClient._();
   factory SSEClient() => _instance;
   SSEClient._();
 
-  http.StreamedResponse? _response;
-  StreamSubscription<List<int>>? _subscription;
+  _SSEConnection? _globalConnection;
+  final Map<String, _SSEConnection> _projectConnections = {};
 
   SSEConnectionStatus _status = SSEConnectionStatus.disconnected;
   String? _serverUrl;
@@ -89,18 +94,26 @@ class SSEClient {
   final _statusController = StreamController<SSEConnectionStatus>.broadcast();
   final _eventController = StreamController<SSEEvent>.broadcast();
   final _messageUpdateController = StreamController<Message>.broadcast();
+  final _messagePartUpdateController = StreamController<Message>.broadcast();
   final _sessionUpdateController = StreamController<Session>.broadcast();
+  final _sessionStatusController = StreamController<Map<String, String>>.broadcast();
   final _sessionCreatedController = StreamController<Session>.broadcast();
   final _sessionDeletedController = StreamController<String>.broadcast();
   final _permissionController = StreamController<Permission>.broadcast();
+  final _fileEditedController = StreamController<Map<String, dynamic>>.broadcast();
+  final _installationUpdateController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<SSEConnectionStatus> get statusStream => _statusController.stream;
   Stream<SSEEvent> get eventStream => _eventController.stream;
   Stream<Message> get messageUpdateStream => _messageUpdateController.stream;
+  Stream<Message> get messagePartUpdateStream => _messagePartUpdateController.stream;
   Stream<Session> get sessionUpdateStream => _sessionUpdateController.stream;
+  Stream<Map<String, String>> get sessionStatusStream => _sessionStatusController.stream;
   Stream<Session> get sessionCreatedStream => _sessionCreatedController.stream;
   Stream<String> get sessionDeletedStream => _sessionDeletedController.stream;
   Stream<Permission> get permissionStream => _permissionController.stream;
+  Stream<Map<String, dynamic>> get fileEditedStream => _fileEditedController.stream;
+  Stream<Map<String, dynamic>> get installationUpdateStream => _installationUpdateController.stream;
 
   SSEConnectionStatus get status => _status;
 
@@ -108,20 +121,11 @@ class SSEClient {
     required String serverUrl,
     String? username,
     String? password,
+    String? directory,
   }) {
-    if (_response != null && _status == SSEConnectionStatus.connected) {
-      return;
-    }
-
     _serverUrl = serverUrl;
     _username = username;
     _password = password;
-    _updateStatus(SSEConnectionStatus.connecting);
-    _connect();
-  }
-
-  Future<void> _connect() async {
-    if (_serverUrl == null) return;
 
     if (!_userCaWarningShown) {
       if (kDebugMode) {
@@ -130,10 +134,21 @@ class SSEClient {
       _userCaWarningShown = true;
     }
 
+    _updateStatus(SSEConnectionStatus.connecting);
+    _connectGlobal();
+
+    if (directory != null) {
+      connectProject(directory);
+    }
+  }
+
+  Future<void> _connectGlobal() async {
+    if (_serverUrl == null) return;
+
     final sseUrl = '$_serverUrl/global/event';
 
     if (kDebugMode) {
-      print('SSE: Connecting to $sseUrl');
+      print('SSE: Connecting to global events at $sseUrl');
     }
 
     try {
@@ -156,12 +171,13 @@ class SSEClient {
         return;
       }
 
-      _response = response;
+      _globalConnection = _SSEConnection(url: sseUrl);
+      _globalConnection!.response = response;
       _updateStatus(SSEConnectionStatus.connected);
       _reconnectAttempts = 0;
 
       String buffer = '';
-      _subscription = response.stream.listen(
+      _globalConnection!.subscription = response.stream.listen(
         (chunk) {
           buffer += utf8.decode(chunk);
           final lines = buffer.split('\n');
@@ -169,7 +185,7 @@ class SSEClient {
 
           for (final line in lines) {
             if (line.startsWith('data: ')) {
-              _handleData(line.substring(6));
+              _handleData(line.substring(6), isGlobal: true);
             }
           }
         },
@@ -182,7 +198,7 @@ class SSEClient {
         },
         onDone: () {
           if (kDebugMode) {
-            print('SSE: Connection closed');
+            print('SSE: Global connection closed');
           }
           if (_status == SSEConnectionStatus.connected) {
             _updateStatus(SSEConnectionStatus.disconnected);
@@ -198,7 +214,80 @@ class SSEClient {
     }
   }
 
-  void _handleData(String dataStr) {
+  Future<void> connectProject(String directory) async {
+    if (_serverUrl == null || _projectConnections.containsKey(directory)) return;
+
+    final sseUrl = '$_serverUrl/event?directory=${Uri.encodeComponent(directory)}';
+
+    if (kDebugMode) {
+      print('SSE: Connecting to project events at $sseUrl');
+    }
+
+    try {
+      final uri = Uri.parse(sseUrl);
+      final request = http.Request('GET', uri);
+      request.headers['Accept'] = 'text/event-stream';
+      if (_username != null && _password != null) {
+        final credentials = base64Encode(utf8.encode('$_username:$_password'));
+        request.headers['Authorization'] = 'Basic $credentials';
+      }
+
+      final client = platformHttpClient.client;
+      final response = await client.send(request);
+
+      if (response.statusCode != 200) {
+        if (kDebugMode) {
+          print('SSE: Project HTTP error: ${response.statusCode}');
+        }
+        return;
+      }
+
+      final connection = _SSEConnection(url: sseUrl, directory: directory);
+      connection.response = response;
+      _projectConnections[directory] = connection;
+
+      String buffer = '';
+      connection.subscription = response.stream.listen(
+        (chunk) {
+          buffer += utf8.decode(chunk);
+          final lines = buffer.split('\n');
+          buffer = lines.removeLast();
+
+          for (final line in lines) {
+            if (line.startsWith('data: ')) {
+              _handleData(line.substring(6), directory: directory);
+            }
+          }
+        },
+        onError: (error) {
+          if (kDebugMode) {
+            print('SSE: Project stream error: $error');
+          }
+          _projectConnections.remove(directory);
+        },
+        onDone: () {
+          if (kDebugMode) {
+            print('SSE: Project connection closed');
+          }
+          _projectConnections.remove(directory);
+        },
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('SSE: Failed to connect project: $e');
+      }
+    }
+  }
+
+  void disconnectProject(String directory) {
+    final connection = _projectConnections[directory];
+    if (connection != null) {
+      connection.subscription?.cancel();
+      _projectConnections.remove(directory);
+    }
+  }
+
+  void _handleData(String dataStr, {String? directory, bool isGlobal = false}) {
     if (dataStr.isEmpty) return;
 
     if (kDebugMode) {
@@ -208,130 +297,124 @@ class SSEClient {
     final event = SSEEvent.parse('data: $dataStr');
     _eventController.add(event);
 
-    // Handle message.updated
-    if (event.event == 'message.updated' && event.data != null) {
-      try {
-        // The data contains the full payload, need to extract info
-        final payload = event.data!;
-        if (payload.containsKey('payload') && payload['payload'] is Map) {
-          final innerPayload = payload['payload'] as Map<String, dynamic>;
-          if (innerPayload.containsKey('properties') && innerPayload['properties'] is Map) {
-            final properties = innerPayload['properties'] as Map<String, dynamic>;
-            if (properties.containsKey('info')) {
-              final msg = Message.fromJson(properties['info'] as Map<String, dynamic>);
-              _messageUpdateController.add(msg);
-            }
-          }
+    if (isGlobal) {
+      _handleGlobalEvent(event);
+    } else {
+      _handleProjectEvent(event, directory);
+    }
+  }
+
+  void _handleGlobalEvent(SSEEvent event) {
+    switch (event.event) {
+      case 'installation.updated':
+      case 'installation.update-available':
+        if (event.data != null) {
+          _installationUpdateController.add(event.data!);
         }
-      } catch (e) {
+        break;
+      case 'server.instance.disposed':
+      case 'global.disposed':
         if (kDebugMode) {
-          print('SSE: Failed to parse message.updated: $e');
+          print('SSE: Server disposing');
+        }
+        break;
+    }
+  }
+
+  void _handleProjectEvent(SSEEvent event, String? directory) {
+    final payload = event.data;
+    if (payload == null) return;
+
+    Map<String, dynamic>? extractInfo(Map<String, dynamic> data) {
+      if (data.containsKey('payload') && data['payload'] is Map) {
+        final inner = data['payload'] as Map<String, dynamic>;
+        if (inner.containsKey('properties') && inner['properties'] is Map) {
+          return inner['properties'] as Map<String, dynamic>;
         }
       }
+      return data;
     }
 
-    // Handle message.part.updated
-    if (event.event == 'message.part.updated' && event.data != null) {
-      try {
-        final payload = event.data!;
-        if (payload.containsKey('payload') && payload['payload'] is Map) {
-          final innerPayload = payload['payload'] as Map<String, dynamic>;
-          if (innerPayload.containsKey('properties') && innerPayload['properties'] is Map) {
-            final properties = innerPayload['properties'] as Map<String, dynamic>;
-            if (properties.containsKey('info')) {
-              final msg = Message.fromJson(properties['info'] as Map<String, dynamic>);
-              _messageUpdateController.add(msg);
-            }
+    try {
+      switch (event.event) {
+        case 'message.updated':
+          final info = extractInfo(payload);
+          if (info?.containsKey('info') == true) {
+            final msg = Message.fromJson(info!['info'] as Map<String, dynamic>);
+            _messageUpdateController.add(msg);
           }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('SSE: Failed to parse message.part.updated: $e');
-        }
+          break;
+
+        case 'message.part.updated':
+          final info = extractInfo(payload);
+          if (info?.containsKey('info') == true) {
+            final msg = Message.fromJson(info!['info'] as Map<String, dynamic>);
+            _messagePartUpdateController.add(msg);
+          }
+          break;
+
+        case 'message.part.removed':
+          if (kDebugMode) {
+            print('SSE: Message part removed');
+          }
+          break;
+
+        case 'session.updated':
+          final info = extractInfo(payload);
+          if (info?.containsKey('info') == true) {
+            final session = Session.fromJson(info!['info'] as Map<String, dynamic>);
+            _sessionUpdateController.add(session);
+          }
+          break;
+
+        case 'session.status':
+          final info = extractInfo(payload);
+          if (info != null) {
+            _sessionStatusController.add(Map<String, String>.from(info));
+          }
+          break;
+
+        case 'session.created':
+          final info = extractInfo(payload);
+          if (info?.containsKey('info') == true) {
+            final session = Session.fromJson(info!['info'] as Map<String, dynamic>);
+            _sessionCreatedController.add(session);
+          }
+          break;
+
+        case 'session.deleted':
+          final info = extractInfo(payload);
+          final sessionId = info?['id'] as String?;
+          if (sessionId != null) {
+            _sessionDeletedController.add(sessionId);
+          }
+          break;
+
+        case 'permission.asked':
+        case 'permission.created':
+          final info = extractInfo(payload);
+          if (info?.containsKey('info') == true) {
+            final permission = Permission.fromJson(info!['info'] as Map<String, dynamic>);
+            _permissionController.add(permission);
+          }
+          break;
+
+        case 'question.asked':
+          if (kDebugMode) {
+            print('SSE: Question asked');
+          }
+          break;
+
+        case 'file.edited':
+          final info = extractInfo(payload);
+          if (info != null) {
+            _fileEditedController.add(info);
+          }
+          break;
       }
-    }
-
-    // Handle session.updated
-    if (event.event == 'session.updated' && event.data != null) {
-      try {
-        final payload = event.data!;
-        if (payload.containsKey('payload') && payload['payload'] is Map) {
-          final innerPayload = payload['payload'] as Map<String, dynamic>;
-          if (innerPayload.containsKey('properties') && innerPayload['properties'] is Map) {
-            final properties = innerPayload['properties'] as Map<String, dynamic>;
-            if (properties.containsKey('info')) {
-              final session = Session.fromJson(properties['info'] as Map<String, dynamic>);
-              _sessionUpdateController.add(session);
-            }
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('SSE: Failed to parse session.updated: $e');
-        }
-      }
-    }
-
-    // Handle session.created
-    if (event.event == 'session.created' && event.data != null) {
-      try {
-        final payload = event.data!;
-        if (payload.containsKey('payload') && payload['payload'] is Map) {
-          final innerPayload = payload['payload'] as Map<String, dynamic>;
-          if (innerPayload.containsKey('properties') && innerPayload['properties'] is Map) {
-            final properties = innerPayload['properties'] as Map<String, dynamic>;
-            if (properties.containsKey('info')) {
-              final session = Session.fromJson(properties['info'] as Map<String, dynamic>);
-              _sessionCreatedController.add(session);
-            }
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('SSE: Failed to parse session.created: $e');
-        }
-      }
-    }
-
-    // Handle session.deleted
-    if (event.event == 'session.deleted' && event.data != null) {
-      try {
-        final payload = event.data!;
-        if (payload.containsKey('payload') && payload['payload'] is Map) {
-          final innerPayload = payload['payload'] as Map<String, dynamic>;
-          if (innerPayload.containsKey('properties') && innerPayload['properties'] is Map) {
-            final properties = innerPayload['properties'] as Map<String, dynamic>;
-            final sessionId = properties['id'] as String?;
-            if (sessionId != null) {
-              _sessionDeletedController.add(sessionId);
-            }
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('SSE: Failed to parse session.deleted: $e');
-        }
-      }
-    }
-
-    // Handle permission.created
-    if (event.event == 'permission.created' && event.data != null) {
-      try {
-        final payload = event.data!;
-        if (payload.containsKey('payload') && payload['payload'] is Map) {
-          final innerPayload = payload['payload'] as Map<String, dynamic>;
-          if (innerPayload.containsKey('properties') && innerPayload['properties'] is Map) {
-            final properties = innerPayload['properties'] as Map<String, dynamic>;
-            if (properties.containsKey('info')) {
-              final permission = Permission.fromJson(properties['info'] as Map<String, dynamic>);
-              _permissionController.add(permission);
-            }
-          }
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('SSE: Failed to parse permission.created: $e');
-        }
+    } catch (e) {
+      if (kDebugMode) {
+        print('SSE: Failed to parse event ${event.event}: $e');
       }
     }
   }
@@ -358,7 +441,7 @@ class SSEClient {
 
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(delay, () {
-      _connect();
+      _connectGlobal();
     });
   }
 
@@ -372,9 +455,15 @@ class SSEClient {
   void disconnect() {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _subscription?.cancel();
-    _subscription = null;
-    _response = null;
+
+    _globalConnection?.subscription?.cancel();
+    _globalConnection = null;
+
+    for (final connection in _projectConnections.values) {
+      connection.subscription?.cancel();
+    }
+    _projectConnections.clear();
+
     _updateStatus(SSEConnectionStatus.disconnected);
   }
 
@@ -383,9 +472,13 @@ class SSEClient {
     _statusController.close();
     _eventController.close();
     _messageUpdateController.close();
+    _messagePartUpdateController.close();
     _sessionUpdateController.close();
+    _sessionStatusController.close();
     _sessionCreatedController.close();
     _sessionDeletedController.close();
     _permissionController.close();
+    _fileEditedController.close();
+    _installationUpdateController.close();
   }
 }

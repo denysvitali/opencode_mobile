@@ -8,6 +8,12 @@ import '../models/session.dart';
 import '../models/message.dart';
 import '../models/permission.dart';
 import '../models/provider.dart';
+import '../models/pty.dart';
+import '../models/todo.dart';
+import '../models/diff.dart';
+import '../models/worktree.dart';
+import '../models/tool.dart';
+import '../models/mcp_resource.dart';
 
 class OpenCodeClient {
   static final OpenCodeClient _instance = OpenCodeClient._();
@@ -22,7 +28,7 @@ class OpenCodeClient {
     _config = config;
   }
 
-  Future<void> updateConfig(ServerConfig config) async {
+  Future<void> setServerConfig(ServerConfig config) async {
     _config = config;
   }
 
@@ -79,11 +85,41 @@ class OpenCodeClient {
     );
   }
 
+  Future<http.Response> _patch(
+    String path, {
+    Map<String, dynamic>? queryParams,
+    Map<String, dynamic>? body,
+  }) async {
+    _ensureInitialized();
+    final uri = _buildUri(path, queryParams: queryParams);
+    return platformHttpClient.client.patch(
+      uri,
+      headers: _buildHeaders(),
+      body: body != null ? jsonEncode(body) : null,
+    );
+  }
+
+  Future<http.Response> _put(
+    String path, {
+    Map<String, dynamic>? queryParams,
+    Map<String, dynamic>? body,
+  }) async {
+    _ensureInitialized();
+    final uri = _buildUri(path, queryParams: queryParams);
+    return platformHttpClient.client.put(
+      uri,
+      headers: _buildHeaders(),
+      body: body != null ? jsonEncode(body) : null,
+    );
+  }
+
   Future<http.Response> _delete(String path, {Map<String, dynamic>? queryParams}) async {
     _ensureInitialized();
     final uri = _buildUri(path, queryParams: queryParams);
     return platformHttpClient.client.delete(uri, headers: _buildHeaders());
   }
+
+  // ==================== Global Routes ====================
 
   Future<HealthCheckResult> healthCheck() async {
     try {
@@ -101,8 +137,35 @@ class OpenCodeClient {
     }
   }
 
-  Future<List<Project>> listProjects() async {
-    final response = await _get('/project');
+  Future<AppConfig> getGlobalConfig() async {
+    final response = await _get('/global/config');
+    if (_isSuccess(response.statusCode)) {
+      return AppConfig.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to get global config: ${response.statusCode}');
+  }
+
+  Future<AppConfig> updateGlobalConfig(AppConfig config) async {
+    final response = await _patch('/global/config', body: config.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return AppConfig.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to update global config: ${response.statusCode}');
+  }
+
+  Future<bool> disposeGlobal() async {
+    final response = await _post('/global/dispose');
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to dispose global: ${response.statusCode}');
+  }
+
+  // ==================== Project Routes ====================
+
+  Future<List<Project>> listProjects({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/project', queryParams: queryParams);
     if (_isSuccess(response.statusCode)) {
       final data = jsonDecode(response.body) as List<dynamic>;
       return data.map((p) => Project.fromJson(p as Map<String, dynamic>)).toList();
@@ -110,12 +173,70 @@ class OpenCodeClient {
     throw OpenCodeException('Failed to list projects: ${response.statusCode}');
   }
 
-  Future<List<Session>> listSessions({String? directory}) async {
-    final queryParams = <String, dynamic>{};
-    if (directory != null) {
-      queryParams['directory'] = directory;
+  Future<Project> getCurrentProject({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/project/current', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return Project.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
-    final response = await _get('/session', queryParams: queryParams);
+    throw OpenCodeException('Failed to get current project: ${response.statusCode}');
+  }
+
+  Future<Project> updateProject(String projectId, ProjectUpdateInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _patch('/project/$projectId', queryParams: queryParams, body: input.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return Project.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to update project: ${response.statusCode}');
+  }
+
+  // ==================== Config Routes ====================
+
+  Future<AppConfig> getConfig({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/config', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return AppConfig.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to get config: ${response.statusCode}');
+  }
+
+  Future<AppConfig> updateConfig(AppConfig config, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _patch('/config', queryParams: queryParams, body: config.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return AppConfig.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to update config: ${response.statusCode}');
+  }
+
+  Future<ProvidersResponse> getConfigProviders({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/config/providers', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return ProvidersResponse.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to get config providers: ${response.statusCode}');
+  }
+
+  // ==================== Session Routes ====================
+
+  Future<List<Session>> listSessions({
+    String? directory,
+    bool? roots,
+    int? start,
+    String? search,
+    int? limit,
+  }) async {
+    final queryParams = <String, dynamic>{};
+    if (directory != null) queryParams['directory'] = directory;
+    if (roots == true) queryParams['roots'] = 'true';
+    if (start != null) queryParams['start'] = start;
+    if (search != null) queryParams['search'] = search;
+    if (limit != null) queryParams['limit'] = limit;
+    
+    final response = await _get('/session', queryParams: queryParams.isNotEmpty ? queryParams : null);
     if (_isSuccess(response.statusCode)) {
       final data = jsonDecode(response.body) as List<dynamic>;
       return data.map((s) => Session.fromJson(s as Map<String, dynamic>)).toList();
@@ -125,23 +246,28 @@ class OpenCodeClient {
 
   Future<Session> createSession({
     String? directory,
-    String? title,
+    SessionCreateInput? input,
   }) async {
-    final body = <String, dynamic>{};
-    if (directory != null) body['directory'] = directory;
-    if (title != null) body['title'] = title;
-    
-    final response = await _post('/session', body: body);
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _post('/session', queryParams: queryParams, body: input?.toJson() ?? {});
     if (_isSuccess(response.statusCode)) {
       return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
     throw OpenCodeException('Failed to create session: ${response.statusCode}');
   }
 
+  Future<Map<String, String>> getSessionStatuses({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/session/status', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data.map((k, v) => MapEntry(k, v.toString()));
+    }
+    throw OpenCodeException('Failed to get session statuses: ${response.statusCode}');
+  }
+
   Future<Session> getSession(String sessionId, {String? directory}) async {
-    final queryParams = <String, dynamic>{};
-    if (directory != null) queryParams['directory'] = directory;
-    
+    final queryParams = directory != null ? {'directory': directory} : null;
     final response = await _get('/session/$sessionId', queryParams: queryParams);
     if (_isSuccess(response.statusCode)) {
       return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
@@ -149,26 +275,80 @@ class OpenCodeClient {
     throw OpenCodeException('Failed to get session: ${response.statusCode}');
   }
 
-  Future<void> deleteSession(String sessionId, {String? directory}) async {
-    final queryParams = <String, dynamic>{};
-    if (directory != null) queryParams['directory'] = directory;
-    
-    final response = await _delete('/session/$sessionId', queryParams: queryParams);
-    if (!_isSuccess(response.statusCode)) {
-      throw OpenCodeException('Failed to delete session: ${response.statusCode}');
+  Future<Session> updateSession(String sessionId, SessionUpdateInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _patch('/session/$sessionId', queryParams: queryParams, body: input.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
     }
+    throw OpenCodeException('Failed to update session: ${response.statusCode}');
   }
 
-  Future<List<Message>> getMessages(String sessionId, {String? directory}) async {
-    final queryParams = <String, dynamic>{};
-    if (directory != null) queryParams['directory'] = directory;
+  Future<bool> deleteSession(String sessionId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _delete('/session/$sessionId', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to delete session: ${response.statusCode}');
+  }
 
+  Future<List<Session>> getSessionChildren(String sessionId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/session/$sessionId/children', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data.map((s) => Session.fromJson(s as Map<String, dynamic>)).toList();
+    }
+    throw OpenCodeException('Failed to get session children: ${response.statusCode}');
+  }
+
+  Future<List<Todo>> getSessionTodos(String sessionId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/session/$sessionId/todo', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data.map((t) => Todo.fromJson(t as Map<String, dynamic>)).toList();
+    }
+    throw OpenCodeException('Failed to get session todos: ${response.statusCode}');
+  }
+
+  Future<bool> initSession(String sessionId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _post('/session/$sessionId/init', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to init session: ${response.statusCode}');
+  }
+
+  Future<SessionDiff> getSessionDiff(String sessionId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/session/$sessionId/diff', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return SessionDiff.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to get session diff: ${response.statusCode}');
+  }
+
+  Future<Session> revertToMessage(String sessionId, String messageId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/session/$sessionId/revert/$messageId', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to revert to message: ${response.statusCode}');
+  }
+
+  // ==================== Message Routes ====================
+
+  Future<List<Message>> getMessages(String sessionId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
     final response = await _get('/session/$sessionId/message', queryParams: queryParams);
     if (_isSuccess(response.statusCode)) {
       final data = jsonDecode(response.body) as List<dynamic>;
       return data.map((item) {
         final m = item as Map<String, dynamic>;
-        // Handle {info: Message, parts: Part[]} wrapper format
         if (m.containsKey('info') && m.containsKey('parts')) {
           final info = m['info'] as Map<String, dynamic>;
           final parts = m['parts'] as List<dynamic>? ?? [];
@@ -181,7 +361,7 @@ class OpenCodeClient {
     throw OpenCodeException('Failed to get messages: ${response.statusCode}');
   }
 
-  Future<Message> sendMessage(
+  Future<Message> sendPrompt(
     String sessionId, {
     required String text,
     String? directory,
@@ -198,26 +378,19 @@ class OpenCodeClient {
       body['model'] = {'providerID': providerID, 'modelID': modelID};
     }
 
-    final response = await _post('/session/$sessionId/message', queryParams: queryParams, body: body);
+    final response = await _post('/session/$sessionId/prompt', queryParams: queryParams, body: body);
     if (_isSuccess(response.statusCode)) {
-      // Server may return empty body when using explicit model selection
       if (response.body.isEmpty) {
-        return Message(
-          id: '',
-          sessionId: sessionId,
-          role: MessageRole.user,
-          parts: [],
-        );
+        return Message(id: '', sessionId: sessionId, role: MessageRole.user, parts: []);
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
-      // Ensure sessionId is set (server may not include it since it's in the URL)
       json['sessionID'] = sessionId;
       return Message.fromJson(json);
     }
-    throw OpenCodeException('Failed to send message: ${response.statusCode}');
+    throw OpenCodeException('Failed to send prompt: ${response.statusCode}');
   }
 
-  Stream<Message> sendMessageStream(
+  Stream<Message> sendPromptStream(
     String sessionId, {
     required String text,
     String? directory,
@@ -227,7 +400,7 @@ class OpenCodeClient {
     _ensureInitialized();
 
     final queryParams = directory != null ? {'directory': directory} : null;
-    final uri = _buildUri('/session/$sessionId/message', queryParams: queryParams);
+    final uri = _buildUri('/session/$sessionId/prompt', queryParams: queryParams);
 
     final client = platformHttpClient.client;
     final request = http.Request('POST', uri);
@@ -266,13 +439,21 @@ class OpenCodeClient {
     }
   }
 
-  Future<void> abortSession(String sessionId, {String? directory}) async {
+  Future<bool> cancelSession(String sessionId, {String? directory}) async {
     final queryParams = directory != null ? {'directory': directory} : null;
-    final response = await _post('/session/$sessionId/abort', queryParams: queryParams);
-    if (!_isSuccess(response.statusCode)) {
-      throw OpenCodeException('Failed to abort session: ${response.statusCode}');
+    final response = await _post('/session/$sessionId/cancel', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
     }
+    throw OpenCodeException('Failed to cancel session: ${response.statusCode}');
   }
+
+  // Legacy alias
+  Future<bool> abortSession(String sessionId, {String? directory}) async {
+    return cancelSession(sessionId, directory: directory);
+  }
+
+  // ==================== Permission Routes ====================
 
   Future<List<Permission>> getPermissions({String? directory}) async {
     final queryParams = directory != null ? {'directory': directory} : null;
@@ -284,7 +465,7 @@ class OpenCodeClient {
     throw OpenCodeException('Failed to get permissions: ${response.statusCode}');
   }
 
-  Future<void> replyPermission(
+  Future<bool> replyPermission(
     String permissionId, {
     required PermissionReply reply,
     String? directory,
@@ -295,11 +476,195 @@ class OpenCodeClient {
       queryParams: queryParams,
       body: {'reply': reply.name},
     );
-    if (!_isSuccess(response.statusCode)) {
-      throw OpenCodeException('Failed to reply to permission: ${response.statusCode}');
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
     }
+    throw OpenCodeException('Failed to reply to permission: ${response.statusCode}');
   }
 
+  // ==================== Auth Routes ====================
+
+  Future<bool> setAuth(String providerId, Map<String, dynamic> credentials) async {
+    final response = await _put('/auth/$providerId', body: credentials);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to set auth: ${response.statusCode}');
+  }
+
+  Future<bool> removeAuth(String providerId) async {
+    final response = await _delete('/auth/$providerId');
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to remove auth: ${response.statusCode}');
+  }
+
+  // ==================== PTY Routes ====================
+
+  Future<List<Pty>> listPtys({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/pty', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data.map((p) => Pty.fromJson(p as Map<String, dynamic>)).toList();
+    }
+    throw OpenCodeException('Failed to list ptys: ${response.statusCode}');
+  }
+
+  Future<Pty> createPty(PtyCreateInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _post('/pty', queryParams: queryParams, body: input.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return Pty.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to create pty: ${response.statusCode}');
+  }
+
+  Future<Pty> getPty(String ptyId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/pty/$ptyId', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return Pty.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to get pty: ${response.statusCode}');
+  }
+
+  Future<Pty> updatePty(String ptyId, PtyUpdateInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _put('/pty/$ptyId', queryParams: queryParams, body: input.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return Pty.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to update pty: ${response.statusCode}');
+  }
+
+  Future<bool> removePty(String ptyId, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _delete('/pty/$ptyId', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to remove pty: ${response.statusCode}');
+  }
+
+  // ==================== Instance Routes ====================
+
+  Future<bool> disposeInstance({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _post('/instance/dispose', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to dispose instance: ${response.statusCode}');
+  }
+
+  // ==================== Tool Routes (Experimental) ====================
+
+  Future<List<String>> getToolIds({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/experimental/tool/ids', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final ids = data['ids'] as List<dynamic>? ?? [];
+      return ids.map((e) => e.toString()).toList();
+    }
+    throw OpenCodeException('Failed to get tool ids: ${response.statusCode}');
+  }
+
+  Future<ToolList> getTools({
+    required String provider,
+    required String model,
+    String? directory,
+  }) async {
+    final queryParams = <String, dynamic>{
+      'provider': provider,
+      'model': model,
+    };
+    if (directory != null) queryParams['directory'] = directory;
+    final response = await _get('/experimental/tool', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return ToolList.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to get tools: ${response.statusCode}');
+  }
+
+  // ==================== Worktree Routes (Experimental) ====================
+
+  Future<Worktree> createWorktree(WorktreeCreateInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _post('/experimental/worktree', queryParams: queryParams, body: input.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return Worktree.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    }
+    throw OpenCodeException('Failed to create worktree: ${response.statusCode}');
+  }
+
+  Future<List<String>> listWorktrees({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/experimental/worktree', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data.map((e) => e.toString()).toList();
+    }
+    throw OpenCodeException('Failed to list worktrees: ${response.statusCode}');
+  }
+
+  Future<bool> removeWorktree(WorktreeRemoveInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _delete('/experimental/worktree', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to remove worktree: ${response.statusCode}');
+  }
+
+  Future<bool> resetWorktree(WorktreeResetInput input, {String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _post('/experimental/worktree/reset', queryParams: queryParams, body: input.toJson());
+    if (_isSuccess(response.statusCode)) {
+      return jsonDecode(response.body) as bool? ?? true;
+    }
+    throw OpenCodeException('Failed to reset worktree: ${response.statusCode}');
+  }
+
+  // ==================== MCP Resource Routes (Experimental) ====================
+
+  Future<Map<String, McpResource>> getMcpResources({String? directory}) async {
+    final queryParams = directory != null ? {'directory': directory} : null;
+    final response = await _get('/experimental/resource', queryParams: queryParams);
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data.map((k, v) => MapEntry(k, McpResource.fromJson(v as Map<String, dynamic>)));
+    }
+    throw OpenCodeException('Failed to get mcp resources: ${response.statusCode}');
+  }
+
+  // ==================== Legacy/Deprecated ====================
+
+  @Deprecated('Use sendPrompt instead')
+  Future<Message> sendMessage(
+    String sessionId, {
+    required String text,
+    String? directory,
+    String? providerID,
+    String? modelID,
+  }) async {
+    return sendPrompt(sessionId, text: text, directory: directory, providerID: providerID, modelID: modelID);
+  }
+
+  @Deprecated('Use sendPromptStream instead')
+  Stream<Message> sendMessageStream(
+    String sessionId, {
+    required String text,
+    String? directory,
+    String? providerID,
+    String? modelID,
+  }) async* {
+    yield* sendPromptStream(sessionId, text: text, directory: directory, providerID: providerID, modelID: modelID);
+  }
+
+  @Deprecated('Use getConfigProviders instead')
   Future<List<Provider>> getProviders() async {
     final response = await _get('/provider');
     if (_isSuccess(response.statusCode)) {
@@ -308,16 +673,6 @@ class OpenCodeClient {
       return all.map((p) => Provider.fromJson(p as Map<String, dynamic>)).toList();
     }
     throw OpenCodeException('Failed to get providers: ${response.statusCode}');
-  }
-
-  Future<List<Provider>> getConfigProviders() async {
-    final response = await _get('/config/providers');
-    if (_isSuccess(response.statusCode)) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final providers = data['providers'] as List<dynamic>? ?? [];
-      return providers.map((p) => Provider.fromJson(p as Map<String, dynamic>)).toList();
-    }
-    throw OpenCodeException('Failed to get config providers: ${response.statusCode}');
   }
 
   void dispose() {}
