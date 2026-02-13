@@ -105,3 +105,6 @@ test_driver/
 
 # Claude Code CLI local settings
 .claude/
+
+# Android build artifacts
+android/build/
