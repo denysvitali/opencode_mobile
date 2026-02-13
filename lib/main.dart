@@ -8,13 +8,14 @@ import 'core/providers/connection_provider.dart';
 import 'core/services/storage_service.dart';
 import 'core/utils/theme.dart';
 import 'features/connection/connection_screen.dart';
+import 'features/projects/projects_screen.dart';
 import 'features/sessions/sessions_screen.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/settings/settings_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   if (Platform.isAndroid) {
     await platformHttpClient.initialize();
     if (platformHttpClient.hasCronetFailed) {
@@ -22,13 +23,22 @@ Future<void> main() async {
           'User CA certificates may not be trusted for REST API.');
     }
   }
-  
+
   await StorageService().initialize();
-  runApp(const ProviderScope(child: OpenCodeApp()));
+
+  // Load theme synchronously before app starts
+  final savedTheme = await StorageService().getThemeMode();
+  final themeMode = AppThemeModeExtension.fromString(savedTheme);
+
+  runApp(ProviderScope(
+    child: OpenCodeApp(initialThemeMode: themeMode),
+  ));
 }
 
 class OpenCodeApp extends ConsumerStatefulWidget {
-  const OpenCodeApp({super.key});
+  final AppThemeMode initialThemeMode;
+
+  const OpenCodeApp({super.key, required this.initialThemeMode});
 
   @override
   ConsumerState<OpenCodeApp> createState() => _OpenCodeAppState();
@@ -36,21 +46,14 @@ class OpenCodeApp extends ConsumerStatefulWidget {
 
 class _OpenCodeAppState extends ConsumerState<OpenCodeApp> {
   late final GoRouter _router;
-  AppThemeMode _themeMode = AppThemeMode.system;
+  late AppThemeMode _themeMode;
 
   @override
   void initState() {
     super.initState();
+    _themeMode = widget.initialThemeMode;
     _router = _buildRouter();
-    _loadTheme();
     _initConnection();
-  }
-
-  Future<void> _loadTheme() async {
-    final mode = await StorageService().getThemeMode();
-    setState(() {
-      _themeMode = AppThemeModeExtension.fromString(mode);
-    });
   }
 
   Future<void> _initConnection() async {
@@ -76,15 +79,25 @@ class _OpenCodeAppState extends ConsumerState<OpenCodeApp> {
           path: '/',
           name: 'home',
           builder: (context, state) => const ConnectionGate(
-            child: SessionsScreen(),
+            child: ProjectsScreen(),
+          ),
+        ),
+        GoRoute(
+          path: '/projects',
+          name: 'projects',
+          builder: (context, state) => const ConnectionGate(
+            child: ProjectsScreen(),
           ),
         ),
         GoRoute(
           path: '/sessions',
           name: 'sessions',
-          builder: (context, state) => const ConnectionGate(
-            child: SessionsScreen(),
-          ),
+          builder: (context, state) {
+            final projectId = state.uri.queryParameters['projectId'];
+            return ConnectionGate(
+              child: SessionsScreen(projectId: projectId),
+            );
+          },
         ),
         GoRoute(
           path: '/chat/:sessionId',

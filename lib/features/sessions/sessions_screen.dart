@@ -4,11 +4,15 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/session.dart';
+import '../../core/models/project.dart';
 import '../../core/providers/sessions_provider.dart';
+import '../../core/providers/project_provider.dart';
 import 'new_session_dialog.dart';
 
 class SessionsScreen extends ConsumerStatefulWidget {
-  const SessionsScreen({super.key});
+  final String? projectId;
+
+  const SessionsScreen({super.key, this.projectId});
 
   @override
   ConsumerState<SessionsScreen> createState() => _SessionsScreenState();
@@ -20,11 +24,15 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(sessionsProvider.notifier).loadSessions();
+      ref.read(projectsProvider.notifier).loadProjects();
     });
   }
 
   Future<void> _refreshSessions() async {
-    await ref.read(sessionsProvider.notifier).loadSessions();
+    await Future.wait([
+      ref.read(sessionsProvider.notifier).loadSessions(),
+      ref.read(projectsProvider.notifier).loadProjects(),
+    ]);
   }
 
   Future<void> _createSession() async {
@@ -34,7 +42,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     );
 
     if (session != null && mounted) {
-      context.go('/chat/${session.id}');
+      context.push('/chat/${session.id}');
     }
   }
 
@@ -68,10 +76,54 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
   @override
   Widget build(BuildContext context) {
     final sessionsState = ref.watch(sessionsProvider);
+    final projectsState = ref.watch(projectsProvider);
+
+    // Listen to SSE session events for real-time updates
+    ref.listen(sseSessionCreatedProvider, (previous, next) {
+      next.when(
+        data: (session) {
+          ref.read(sessionsProvider.notifier).addSession(session);
+        },
+        loading: () {},
+        error: (_, __) {},
+      );
+    });
+
+    ref.listen(sseSessionDeletedProvider, (previous, next) {
+      next.when(
+        data: (sessionId) {
+          ref.read(sessionsProvider.notifier).removeSession(sessionId);
+        },
+        loading: () {},
+        error: (_, __) {},
+      );
+    });
+
+    ref.listen(sseSessionUpdateProvider, (previous, next) {
+      next.when(
+        data: (session) {
+          ref.read(sessionsProvider.notifier).updateSession(session);
+        },
+        loading: () {},
+        error: (_, __) {},
+      );
+    });
+
+    // Filter sessions by projectId if provided
+    final filteredSessions = widget.projectId != null
+        ? sessionsState.sessions
+            .where((s) => s.projectId == widget.projectId)
+            .toList()
+        : sessionsState.sessions;
+
+    // Get project name for title if filtering by project
+    final projectName = widget.projectId != null
+        ? projectsState.projectMap[widget.projectId]?.displayName ?? 'Project'
+        : null;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sessions'),
+        title: Text(projectName ?? 'Sessions'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -81,9 +133,12 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
       ),
       body: sessionsState.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : sessionsState.sessions.isEmpty
+          : filteredSessions.isEmpty
               ? _buildEmptyState()
-              : _buildSessionList(sessionsState.sessions),
+              : _buildSessionList(
+                  filteredSessions,
+                  projectsState.projectMap,
+                ),
       floatingActionButton: FloatingActionButton(
         onPressed: _createSession,
         child: const Icon(Icons.add),
@@ -120,20 +175,113 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     );
   }
 
-  Widget _buildSessionList(List<Session> sessions) {
+  Widget _buildSessionList(
+    List<Session> sessions,
+    Map<String, Project> projectMap,
+  ) {
+    // When filtered by project, show simple list without grouping
+    if (widget.projectId != null) {
+      return RefreshIndicator(
+        onRefresh: _refreshSessions,
+        child: ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: sessions.length,
+          itemBuilder: (context, index) {
+            final session = sessions[index];
+            return _SessionTile(
+              session: session,
+              onTap: () => context.push('/chat/${session.id}'),
+              onDelete: () => _deleteSession(session),
+            );
+          },
+        ),
+      );
+    }
+
+    // When not filtered, show grouped by project
+    final grouped = <String?, List<Session>>{};
+    for (final session in sessions) {
+      grouped.putIfAbsent(session.projectId, () => []).add(session);
+    }
+
+    // Sort groups: named projects first (alphabetically), then null/unknown
+    final sortedKeys = grouped.keys.toList()
+      ..sort((a, b) {
+        if (a == null && b == null) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+        final nameA = projectMap[a]?.displayName ?? a;
+        final nameB = projectMap[b]?.displayName ?? b;
+        return nameA.compareTo(nameB);
+      });
+
     return RefreshIndicator(
       onRefresh: _refreshSessions,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: sessions.length,
+        itemCount: sortedKeys.fold<int>(0, (sum, key) =>
+            sum + 1 + grouped[key]!.length), // headers + sessions
         itemBuilder: (context, index) {
-          final session = sessions[index];
-          return _SessionTile(
-            session: session,
-            onTap: () => context.go('/chat/${session.id}'),
-            onDelete: () => _deleteSession(session),
-          );
+          // Calculate which group/item we're at
+          var currentIndex = 0;
+          for (final key in sortedKeys) {
+            final groupSessions = grouped[key]!;
+            if (index == currentIndex) {
+              // This is a header
+              final project = key != null ? projectMap[key] : null;
+              return _ProjectHeader(
+                name: project?.displayName ?? 'Other',
+                subtitle: project?.worktree,
+              );
+            }
+            currentIndex++;
+            if (index < currentIndex + groupSessions.length) {
+              final session = groupSessions[index - currentIndex];
+              return _SessionTile(
+                session: session,
+                onTap: () => context.push('/chat/${session.id}'),
+                onDelete: () => _deleteSession(session),
+              );
+            }
+            currentIndex += groupSessions.length;
+          }
+          return const SizedBox.shrink();
         },
+      ),
+    );
+  }
+}
+
+class _ProjectHeader extends StatelessWidget {
+  final String name;
+  final String? subtitle;
+
+  const _ProjectHeader({required this.name, this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            name,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          if (subtitle != null)
+            Text(
+              subtitle!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
       ),
     );
   }

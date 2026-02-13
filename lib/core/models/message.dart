@@ -36,7 +36,7 @@ class MessagePart {
       id: json['id'] as String?,
       type: _parseType(json['type'] as String?),
       text: json['text'] as String?,
-      toolData: json['tool'] as Map<String, dynamic>?,
+      toolData: json['tool'] is Map ? json['tool'] as Map<String, dynamic> : null,
       fileData: json['file'] as Map<String, dynamic>?,
       error: json['error'] as String?,
     );
@@ -106,7 +106,7 @@ class Message {
     final partsList = json['parts'] as List<dynamic>? ?? [];
     return Message(
       id: json['id'] as String?,
-      sessionId: json['sessionID'] as String? ?? '',
+      sessionId: json['sessionID'] as String? ?? json['sessionId'] as String? ?? '',
       role: json['role'] == 'assistant' ? MessageRole.assistant : MessageRole.user,
       createdAt: json['time'] != null
           ? DateTime.fromMillisecondsSinceEpoch(

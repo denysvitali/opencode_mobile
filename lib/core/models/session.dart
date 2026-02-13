@@ -17,6 +17,7 @@ class Session {
   final String? summary;
   final double? cost;
   final String path;
+  final String? projectId;
 
   Session({
     String? id,
@@ -28,12 +29,18 @@ class Session {
     this.summary,
     this.cost,
     this.path = '',
+    this.projectId,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
   factory Session.fromJson(Map<String, dynamic> json) {
+    // Handle different possible field names for session ID
+    final sessionId = json['id'] as String? ??
+        json['sessionID'] as String? ??
+        json['sessionId'] as String? ??
+        '';
     return Session(
-      id: json['id'] as String? ?? '',
+      id: sessionId,
       title: json['title'] as String?,
       description: json['description'] as String?,
       status: _parseStatus(json['status'] as String?),
@@ -45,9 +52,10 @@ class Session {
           ? DateTime.fromMillisecondsSinceEpoch(
               (json['time']['completed'] as num).toInt())
           : null,
-      summary: json['summary'] as String?,
+      summary: json['summary'] is String ? json['summary'] as String : json['summary']?.toString(),
       cost: (json['cost'] as num?)?.toDouble(),
       path: json['path']?['cwd'] as String? ?? '',
+      projectId: json['projectID'] as String?,
     );
   }
 
@@ -75,6 +83,7 @@ class Session {
       'summary': summary,
       'cost': cost,
       'path': {'cwd': path},
+      if (projectId != null) 'projectID': projectId,
     };
   }
 
@@ -88,6 +97,7 @@ class Session {
     String? summary,
     double? cost,
     String? path,
+    String? projectId,
   }) {
     return Session(
       id: id ?? this.id,
@@ -99,6 +109,7 @@ class Session {
       summary: summary ?? this.summary,
       cost: cost ?? this.cost,
       path: path ?? this.path,
+      projectId: projectId ?? this.projectId,
     );
   }
 

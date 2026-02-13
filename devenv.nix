@@ -4,6 +4,7 @@
   packages = [
     pkgs.git
     pkgs.flutter
+    pkgs.jdk21
   ];
 
   android.enable = false;

@@ -105,7 +105,10 @@ class ConnectionNotifier extends Notifier<ConnectionState> {
   }
 
   void clearError() {
-    state = state.copyWith(errorMessage: null);
+    state = state.copyWith(
+      status: ConnectionStatus.disconnected,
+      errorMessage: null,
+    );
   }
 }
 

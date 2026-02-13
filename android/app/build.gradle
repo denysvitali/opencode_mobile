@@ -42,7 +42,7 @@ android {
 
     defaultConfig {
         applicationId "com.opencode.mobile"
-        minSdk 21
+        minSdkVersion flutter.minSdkVersion
         targetSdk flutter.targetSdkVersion
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName

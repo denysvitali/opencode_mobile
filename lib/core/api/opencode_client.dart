@@ -3,9 +3,11 @@ import 'package:http/http.dart' as http;
 
 import '../http/http_client.dart';
 import '../models/config.dart';
+import '../models/project.dart';
 import '../models/session.dart';
 import '../models/message.dart';
 import '../models/permission.dart';
+import '../models/provider.dart';
 
 class OpenCodeClient {
   static final OpenCodeClient _instance = OpenCodeClient._();
@@ -99,6 +101,15 @@ class OpenCodeClient {
     }
   }
 
+  Future<List<Project>> listProjects() async {
+    final response = await _get('/project');
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as List<dynamic>;
+      return data.map((p) => Project.fromJson(p as Map<String, dynamic>)).toList();
+    }
+    throw OpenCodeException('Failed to list projects: ${response.statusCode}');
+  }
+
   Future<List<Session>> listSessions({String? directory}) async {
     final queryParams = <String, dynamic>{};
     if (directory != null) {
@@ -151,11 +162,21 @@ class OpenCodeClient {
   Future<List<Message>> getMessages(String sessionId, {String? directory}) async {
     final queryParams = <String, dynamic>{};
     if (directory != null) queryParams['directory'] = directory;
-    
+
     final response = await _get('/session/$sessionId/message', queryParams: queryParams);
     if (_isSuccess(response.statusCode)) {
       final data = jsonDecode(response.body) as List<dynamic>;
-      return data.map((m) => Message.fromJson(m as Map<String, dynamic>)).toList();
+      return data.map((item) {
+        final m = item as Map<String, dynamic>;
+        // Handle {info: Message, parts: Part[]} wrapper format
+        if (m.containsKey('info') && m.containsKey('parts')) {
+          final info = m['info'] as Map<String, dynamic>;
+          final parts = m['parts'] as List<dynamic>? ?? [];
+          info['parts'] = parts;
+          return Message.fromJson(info);
+        }
+        return Message.fromJson(m);
+      }).toList();
     }
     throw OpenCodeException('Failed to get messages: ${response.statusCode}');
   }
@@ -164,17 +185,34 @@ class OpenCodeClient {
     String sessionId, {
     required String text,
     String? directory,
+    String? providerID,
+    String? modelID,
   }) async {
     final queryParams = directory != null ? {'directory': directory} : null;
-    final body = {
+    final body = <String, dynamic>{
       'parts': [
         {'type': 'text', 'text': text}
-      ]
+      ],
     };
-    
+    if (providerID != null && modelID != null) {
+      body['model'] = {'providerID': providerID, 'modelID': modelID};
+    }
+
     final response = await _post('/session/$sessionId/message', queryParams: queryParams, body: body);
     if (_isSuccess(response.statusCode)) {
-      return Message.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+      // Server may return empty body when using explicit model selection
+      if (response.body.isEmpty) {
+        return Message(
+          id: '',
+          sessionId: sessionId,
+          role: MessageRole.user,
+          parts: [],
+        );
+      }
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      // Ensure sessionId is set (server may not include it since it's in the URL)
+      json['sessionID'] = sessionId;
+      return Message.fromJson(json);
     }
     throw OpenCodeException('Failed to send message: ${response.statusCode}');
   }
@@ -183,21 +221,27 @@ class OpenCodeClient {
     String sessionId, {
     required String text,
     String? directory,
+    String? providerID,
+    String? modelID,
   }) async* {
     _ensureInitialized();
-    
+
     final queryParams = directory != null ? {'directory': directory} : null;
     final uri = _buildUri('/session/$sessionId/message', queryParams: queryParams);
-    
+
     final client = platformHttpClient.client;
     final request = http.Request('POST', uri);
     request.headers.addAll(_buildHeaders());
     request.headers['Accept'] = 'text/event-stream';
-    request.body = jsonEncode({
+    final body = <String, dynamic>{
       'parts': [
         {'type': 'text', 'text': text}
-      ]
-    });
+      ],
+    };
+    if (providerID != null && modelID != null) {
+      body['model'] = {'providerID': providerID, 'modelID': modelID};
+    }
+    request.body = jsonEncode(body);
 
     final response = await client.send(request);
     final stream = response.stream;
@@ -254,6 +298,26 @@ class OpenCodeClient {
     if (!_isSuccess(response.statusCode)) {
       throw OpenCodeException('Failed to reply to permission: ${response.statusCode}');
     }
+  }
+
+  Future<List<Provider>> getProviders() async {
+    final response = await _get('/provider');
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final all = data['all'] as List<dynamic>? ?? [];
+      return all.map((p) => Provider.fromJson(p as Map<String, dynamic>)).toList();
+    }
+    throw OpenCodeException('Failed to get providers: ${response.statusCode}');
+  }
+
+  Future<List<Provider>> getConfigProviders() async {
+    final response = await _get('/config/providers');
+    if (_isSuccess(response.statusCode)) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final providers = data['providers'] as List<dynamic>? ?? [];
+      return providers.map((p) => Provider.fromJson(p as Map<String, dynamic>)).toList();
+    }
+    throw OpenCodeException('Failed to get config providers: ${response.statusCode}');
   }
 
   void dispose() {}

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/opencode_client.dart';
+import '../api/sse_client.dart';
 import '../models/session.dart';
 
 class SessionsState {
@@ -81,6 +82,21 @@ class SessionsNotifier extends Notifier<SessionsState> {
     }
   }
 
+  void addSession(Session session) {
+    final exists = state.sessions.any((s) => s.id == session.id);
+    if (!exists) {
+      state = state.copyWith(
+        sessions: [session, ...state.sessions],
+      );
+    }
+  }
+
+  void removeSession(String sessionId) {
+    state = state.copyWith(
+      sessions: state.sessions.where((s) => s.id != sessionId).toList(),
+    );
+  }
+
   void clearError() {
     state = state.copyWith(error: null);
   }
@@ -89,3 +105,15 @@ class SessionsNotifier extends Notifier<SessionsState> {
 final sessionsProvider = NotifierProvider<SessionsNotifier, SessionsState>(
   SessionsNotifier.new,
 );
+
+final sseSessionUpdateProvider = StreamProvider<Session>((ref) {
+  return SSEClient().sessionUpdateStream;
+});
+
+final sseSessionCreatedProvider = StreamProvider<Session>((ref) {
+  return SSEClient().sessionCreatedStream;
+});
+
+final sseSessionDeletedProvider = StreamProvider<String>((ref) {
+  return SSEClient().sessionDeletedStream;
+});

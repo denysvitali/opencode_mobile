@@ -102,3 +102,6 @@ secrets/
  Test
 test/.test_coverage.dart
 test_driver/
+
+# Claude Code CLI local settings
+.claude/

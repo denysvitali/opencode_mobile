@@ -24,6 +24,9 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      // Clear any previous connection error when loading the screen
+      ref.read(connectionProvider.notifier).clearError();
+
       final config = ref.read(connectionProvider).config;
       _urlController.text = config.url;
       _usernameController.text = config.username ?? '';

@@ -1,31 +1,40 @@
 class Project {
   final String id;
-  final String name;
-  final String path;
-  final String? description;
+  final String? worktree;
+  final String? vcs;
+  final DateTime? createdAt;
 
   Project({
     required this.id,
-    required this.name,
-    required this.path,
-    this.description,
+    this.worktree,
+    this.vcs,
+    this.createdAt,
   });
 
   factory Project.fromJson(Map<String, dynamic> json) {
     return Project(
       id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? 'Untitled Project',
-      path: json['path'] as String? ?? '',
-      description: json['description'] as String?,
+      worktree: json['worktree'] as String?,
+      vcs: json['vcs'] as String?,
+      createdAt: json['time'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (json['time']['created'] as num).toInt())
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
-      'path': path,
-      if (description != null) 'description': description,
+      if (worktree != null) 'worktree': worktree,
+      if (vcs != null) 'vcs': vcs,
+      if (createdAt != null) 'time': createdAt!.millisecondsSinceEpoch,
     };
+  }
+
+  String get displayName {
+    if (worktree == null || worktree!.isEmpty) return id;
+    final parts = worktree!.split('/');
+    return parts.last.isNotEmpty ? parts.last : id;
   }
 }

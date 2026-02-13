@@ -53,7 +53,7 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
-  Future<void> sendMessage(String sessionId, String text, {String? directory}) async {
+  Future<void> sendMessage(String sessionId, String text, {String? directory, String? providerID, String? modelID}) async {
     if (text.trim().isEmpty) return;
 
     final userMessage = Message(
@@ -73,6 +73,8 @@ class ChatNotifier extends Notifier<ChatState> {
         sessionId,
         text: text,
         directory: directory,
+        providerID: providerID,
+        modelID: modelID,
       );
 
       state = state.copyWith(
@@ -96,6 +98,15 @@ class ChatNotifier extends Notifier<ChatState> {
       state = state.copyWith(messages: newMessages);
     } else {
       state = state.copyWith(messages: [...state.messages, updated]);
+    }
+  }
+
+  Future<void> abortSession(String sessionId) async {
+    try {
+      await OpenCodeClient().abortSession(sessionId);
+      state = state.copyWith(isStreaming: false);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
     }
   }
 

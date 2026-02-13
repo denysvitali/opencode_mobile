@@ -12,6 +12,8 @@ class StorageService {
   static const _keyUsername = 'auth_username';
   static const _keyPassword = 'auth_password';
   static const _keyThemeMode = 'theme_mode';
+  static const _keySelectedProviderId = 'selected_provider_id';
+  static const _keySelectedModelId = 'selected_model_id';
 
   SharedPreferences? _prefs;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
@@ -52,5 +54,26 @@ class StorageService {
 
   Future<void> setThemeMode(String mode) async {
     await _prefs?.setString(_keyThemeMode, mode);
+  }
+
+  String? getSelectedProviderId() {
+    return _prefs?.getString(_keySelectedProviderId);
+  }
+
+  String? getSelectedModelId() {
+    return _prefs?.getString(_keySelectedModelId);
+  }
+
+  Future<void> saveModelSelection(String? providerId, String? modelId) async {
+    if (providerId != null) {
+      await _prefs?.setString(_keySelectedProviderId, providerId);
+    } else {
+      await _prefs?.remove(_keySelectedProviderId);
+    }
+    if (modelId != null) {
+      await _prefs?.setString(_keySelectedModelId, modelId);
+    } else {
+      await _prefs?.remove(_keySelectedModelId);
+    }
   }
 }
