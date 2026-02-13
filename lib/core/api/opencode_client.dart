@@ -378,7 +378,7 @@ class OpenCodeClient {
       body['model'] = {'providerID': providerID, 'modelID': modelID};
     }
 
-    final response = await _post('/session/$sessionId/prompt', queryParams: queryParams, body: body);
+    final response = await _post('/session/$sessionId/message', queryParams: queryParams, body: body);
     if (_isSuccess(response.statusCode)) {
       if (response.body.isEmpty) {
         return Message(id: '', sessionId: sessionId, role: MessageRole.user, parts: []);
@@ -400,7 +400,7 @@ class OpenCodeClient {
     _ensureInitialized();
 
     final queryParams = directory != null ? {'directory': directory} : null;
-    final uri = _buildUri('/session/$sessionId/prompt', queryParams: queryParams);
+    final uri = _buildUri('/session/$sessionId/message', queryParams: queryParams);
 
     final client = platformHttpClient.client;
     final request = http.Request('POST', uri);
