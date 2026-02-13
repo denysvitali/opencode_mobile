@@ -119,22 +119,22 @@ class ModelSelector extends ConsumerWidget {
         const Divider(height: 1),
         ...providers.map((provider) => ExpansionTile(
               leading: Icon(
-                provider.isDefault ? Icons.star : Icons.cloud_outlined,
-                color: provider.isDefault
+                provider.configured ? Icons.star : Icons.cloud_outlined,
+                color: provider.configured
                     ? Theme.of(context).colorScheme.primary
                     : null,
               ),
               title: Text(provider.name),
-              subtitle: provider.isDefault ? const Text('Default provider') : null,
+              subtitle: provider.configured ? const Text('Configured') : null,
               children: provider.models.map((model) {
                 final isSelected = !currentSelection.isDefault &&
                     currentSelection.providerID == provider.id &&
-                    currentSelection.modelID == model;
+                    currentSelection.modelID == model.id;
                 return ListTile(
                   dense: true,
                   contentPadding:
                       const EdgeInsets.only(left: 72, right: 16),
-                  title: Text(model),
+                  title: Text(model.name),
                   trailing: isSelected
                       ? Icon(Icons.check,
                           color: Theme.of(context).colorScheme.primary)
@@ -142,7 +142,7 @@ class ModelSelector extends ConsumerWidget {
                   onTap: () {
                     ref
                         .read(modelSelectionProvider.notifier)
-                        .select(provider.id, model);
+                        .select(provider.id, model.id);
                     Navigator.of(context).pop();
                   },
                 );

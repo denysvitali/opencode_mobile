@@ -112,7 +112,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     // Filter sessions by projectId if provided
     final filteredSessions = widget.projectId != null
         ? sessionsState.sessions
-            .where((s) => s.projectId == widget.projectId)
+            .where((s) => s.projectID == widget.projectId)
             .toList()
         : sessionsState.sessions;
 
@@ -201,7 +201,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     // When not filtered, show grouped by project
     final grouped = <String?, List<Session>>{};
     for (final session in sessions) {
-      grouped.putIfAbsent(session.projectId, () => []).add(session);
+      grouped.putIfAbsent(session.projectID, () => []).add(session);
     }
 
     // Sort groups: named projects first (alphabetically), then null/unknown

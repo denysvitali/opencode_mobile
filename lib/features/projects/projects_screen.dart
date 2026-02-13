@@ -45,7 +45,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
   }
 
   int _getSessionCountForProject(String projectId, List<Session> sessions) {
-    return sessions.where((s) => s.projectId == projectId).length;
+    return sessions.where((s) => s.projectID == projectId).length;
   }
 
   @override

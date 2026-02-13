@@ -172,10 +172,10 @@ class SettingsScreen extends ConsumerWidget {
                           final provider = providers[index];
                           return ExpansionTile(
                             leading: Icon(
-                              provider.isDefault
+                              provider.configured
                                   ? Icons.star
                                   : Icons.cloud_outlined,
-                              color: provider.isDefault
+                              color: provider.configured
                                   ? Theme.of(context).colorScheme.primary
                                   : null,
                             ),
