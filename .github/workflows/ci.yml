@@ -196,43 +196,22 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Start servers and run tests
+      - name: Start servers
         run: |
-          # Start Mock LLM
-          bun run test/mock_llm_server.ts &
-          MOCK_PID=$!
-          
-          # Wait for mock
-          for i in {1..30}; do
-            if curl -s http://localhost:4097/health > /dev/null 2>&1; then
-              echo "✓ Mock server ready"
-              break
-            fi
-            sleep 1
-          done
-          
-          # Start OpenCode
-          export OPENCODE_CONFIG=$(pwd)/test/opencode.test.yaml
-          bun run opencode/packages/opencode/src/cli/cmd/serve.ts &
-          SERVER_PID=$!
-          
-          # Wait for opencode
-          for i in {1..30}; do
-            if curl -s http://localhost:4096/global/health > /dev/null 2>&1; then
-              echo "✓ OpenCode server ready"
-              break
-            fi
-            sleep 1
-          done
-          
-          # Run tests
+          source test/start_servers.sh
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
           flutter test test/integration/session_management_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
-          
-          # Cleanup
-          kill $MOCK_PID $SERVER_PID 2>/dev/null || true
-          
           exit ${TEST_EXIT:-0}
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          kill ${{ env.MOCK_PID }} ${{ env.SERVER_PID }} 2>/dev/null || true
 
   # ============================================
   # Job 4b: Config & Auth Tests
@@ -308,28 +287,22 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Start servers and run tests
+      - name: Start servers
         run: |
-          bun run test/mock_llm_server.ts &
-          MOCK_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4097/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
-          export OPENCODE_CONFIG=$(pwd)/test/opencode.test.yaml
-          bun run opencode/packages/opencode/src/cli/cmd/serve.ts &
-          SERVER_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4096/global/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
+          source test/start_servers.sh
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
           flutter test test/integration/config_auth_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
-          
-          kill $MOCK_PID $SERVER_PID 2>/dev/null || true
           exit ${TEST_EXIT:-0}
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          kill ${{ env.MOCK_PID }} ${{ env.SERVER_PID }} 2>/dev/null || true
 
   # ============================================
   # Job 4c: SSE Events Tests
@@ -405,28 +378,22 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Start servers and run tests
+      - name: Start servers
         run: |
-          bun run test/mock_llm_server.ts &
-          MOCK_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4097/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
-          export OPENCODE_CONFIG=$(pwd)/test/opencode.test.yaml
-          bun run opencode/packages/opencode/src/cli/cmd/serve.ts &
-          SERVER_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4096/global/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
+          source test/start_servers.sh
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
           flutter test test/integration/sse_events_full_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
-          
-          kill $MOCK_PID $SERVER_PID 2>/dev/null || true
           exit ${TEST_EXIT:-0}
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          kill ${{ env.MOCK_PID }} ${{ env.SERVER_PID }} 2>/dev/null || true
 
   # ============================================
   # Job 4d: Streaming Tests
@@ -502,28 +469,22 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Start servers and run tests
+      - name: Start servers
         run: |
-          bun run test/mock_llm_server.ts &
-          MOCK_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4097/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
-          export OPENCODE_CONFIG=$(pwd)/test/opencode.test.yaml
-          bun run opencode/packages/opencode/src/cli/cmd/serve.ts &
-          SERVER_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4096/global/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
+          source test/start_servers.sh
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
           flutter test test/integration/streaming_message_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
-          
-          kill $MOCK_PID $SERVER_PID 2>/dev/null || true
           exit ${TEST_EXIT:-0}
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          kill ${{ env.MOCK_PID }} ${{ env.SERVER_PID }} 2>/dev/null || true
 
   # ============================================
   # Job 4e: Existing Integration Tests
@@ -599,23 +560,14 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Start servers and run tests
+      - name: Start servers
         run: |
-          bun run test/mock_llm_server.ts &
-          MOCK_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4097/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
-          export OPENCODE_CONFIG=$(pwd)/test/opencode.test.yaml
-          bun run opencode/packages/opencode/src/cli/cmd/serve.ts &
-          SERVER_PID=$!
-          for i in {1..30}; do
-            curl -s http://localhost:4096/global/health > /dev/null 2>&1 && break
-            sleep 1
-          done
-          
+          source test/start_servers.sh
+          echo "MOCK_PID=$MOCK_PID" >> $GITHUB_ENV
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: |
           # Run existing integration tests (exclude the new ones tested separately)
           flutter test \
             test/integration/api_connection_test.dart \
@@ -627,9 +579,12 @@ jobs:
             test/integration/message_send_with_model_test.dart \
             test/integration/http_sse_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
-          
-          kill $MOCK_PID $SERVER_PID 2>/dev/null || true
           exit ${TEST_EXIT:-0}
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          kill ${{ env.MOCK_PID }} ${{ env.SERVER_PID }} 2>/dev/null || true
 
   # ============================================
   # Job 5a: Build APK (Parallel with tests)
