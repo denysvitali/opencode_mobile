@@ -69,7 +69,7 @@ class ChatNotifier extends Notifier<ChatState> {
     );
 
     try {
-      final response = await OpenCodeClient().sendMessage(
+      final response = await OpenCodeClient().sendPrompt(
         sessionId,
         text: text,
         directory: directory,
@@ -83,7 +83,10 @@ class ChatNotifier extends Notifier<ChatState> {
         currentMessageId: response.id,
       );
     } catch (e) {
+      final newMessages = List<Message>.from(state.messages);
+      newMessages.remove(userMessage);
       state = state.copyWith(
+        messages: newMessages,
         isStreaming: false,
         error: e.toString(),
       );

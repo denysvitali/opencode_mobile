@@ -381,7 +381,7 @@ class OpenCodeClient {
     final response = await _post('/session/$sessionId/message', queryParams: queryParams, body: body);
     if (_isSuccess(response.statusCode)) {
       if (response.body.isEmpty) {
-        return Message(id: '', sessionId: sessionId, role: MessageRole.user, parts: []);
+        throw OpenCodeException('Empty response from server');
       }
       final json = jsonDecode(response.body) as Map<String, dynamic>;
       json['sessionID'] = sessionId;

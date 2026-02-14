@@ -50,10 +50,10 @@ final providersProvider =
   try {
     final response = await client.getConfigProviders();
     return response.providers;
-  } catch (_) {
+  } catch (e) {
     try {
       return await client.getProviders();
-    } catch (_) {
+    } catch (e) {
       return [];
     }
   }
