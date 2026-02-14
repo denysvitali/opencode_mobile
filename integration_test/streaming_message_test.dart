@@ -144,8 +144,9 @@ void main() {
         // Combine all parts to see full response
         final fullResponse = messages
             .expand((m) => m.parts ?? [])
-            .where((p) => p is TextPart)
-            .map((p) => (p as TextPart).text)
+            .where((p) => p.type == MessagePartType.text)
+            .map((p) => p.text)
+            .where((text) => text != null)
             .join('');
 
         print('Full response length: ${fullResponse.length}');
@@ -355,10 +356,10 @@ void main() {
 
           // Check parts
           for (final part in message.parts ?? []) {
-            expect(part.type, isNotEmpty, reason: 'Part should have type');
+            expect(part.type.name, isNotEmpty, reason: 'Part should have type');
 
-            if (part is TextPart) {
-              expect(part.text, isNotNull, reason: 'TextPart should have text');
+            if (part.type == MessagePartType.text) {
+              expect(part.text, isNotNull, reason: 'Text part should have text');
             }
           }
         }
