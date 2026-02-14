@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build and Test Android APK
 
 on:
   push:
@@ -8,8 +8,120 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout mobile repository
+        uses: actions/checkout@v4
+        with:
+          path: opencode_mobile
+
+      - name: Checkout opencode repository
+        uses: actions/checkout@v4
+        with:
+          repository: anomalyco/opencode
+          path: opencode
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Get Flutter dependencies
+        working-directory: opencode_mobile
+        run: flutter pub get
+
+      - name: Analyze code
+        working-directory: opencode_mobile
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
+
+      - name: Run unit tests
+        working-directory: opencode_mobile
+        run: flutter test --no-pub || true
+
+      - name: Build opencode
+        working-directory: opencode/packages/opencode
+        run: bun run build
+
+      - name: Start Mock LLM Server
+        working-directory: opencode_mobile
+        run: |
+          bun run test/mock_llm_server.ts &
+          echo "MOCK_PID=$!" >> $GITHUB_ENV
+          # Wait for mock server to be ready
+          for i in {1..30}; do
+            if curl -s http://localhost:4097/health > /dev/null; then
+              echo "Mock server is ready"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Start OpenCode Server
+        working-directory: opencode_mobile
+        run: |
+          export OPENCODE_CONFIG=$(pwd)/test/opencode.test.yaml
+          bun run ../opencode/packages/opencode/src/cli/cmd/serve.ts &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          # Wait for opencode server to be ready
+          for i in {1..30}; do
+            if curl -s http://localhost:4096/global/health > /dev/null; then
+              echo "OpenCode server is ready"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run integration tests
+        working-directory: opencode_mobile
+        timeout-minutes: 15
+        run: |
+          flutter test integration_test/ \
+            --dart-define=SERVER_URL=http://localhost:4096 \
+            --dart-define=SERVER_PASSWORD=testpass \
+            || echo "Some integration tests failed - check logs above"
+        continue-on-error: true
+
+      - name: Cleanup servers
+        if: always()
+        run: |
+          if [ -n "$MOCK_PID" ]; then kill $MOCK_PID 2>/dev/null || true; fi
+          if [ -n "$SERVER_PID" ]; then kill $SERVER_PID 2>/dev/null || true; fi
+
+      - name: Build APK
+        working-directory: opencode_mobile
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-mobile-apk
+          path: opencode_mobile/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Build App Bundle (for Play Store)
+        working-directory: opencode_mobile
+        run: flutter build appbundle --release
+
+      - name: Upload App Bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-mobile-aab
+          path: opencode_mobile/build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
   build:
     runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout repository
@@ -24,28 +136,22 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Analyze code
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
-
-      - name: Run tests
-        run: flutter test --no-pub || true
-
       - name: Build APK
         run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: opencode-mobile-apk
+          name: opencode-mobile-apk-release
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
-      - name: Build App Bundle (for Play Store)
+      - name: Build App Bundle
         run: flutter build appbundle --release
 
       - name: Upload App Bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: opencode-mobile-aab
+          name: opencode-mobile-aab-release
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 30

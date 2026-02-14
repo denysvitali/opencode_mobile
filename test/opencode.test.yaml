@@ -1,0 +1,32 @@
+# Test configuration for OpenCode Mobile integration tests
+# This configures a mock LLM provider for testing
+
+$schema: https://opencode.ai/config.json
+
+# Configure mock provider pointing to the mock LLM server
+provider:
+  mock:
+    models:
+      mock-gpt-4:
+        name: Mock GPT-4
+        context: 8192
+        api:
+          url: http://localhost:4097
+
+# Default agent settings
+agent:
+  model: mock/mock-gpt-4
+
+# Disable MCP for testing
+mcp: {}
+
+# Server settings for testing
+server:
+  port: 4096
+  hostname: 0.0.0.0
+  cors:
+    - "http://localhost:*"
+    - "http://127.0.0.1:*"
+
+# Plugins (empty for testing)
+plugin: []
