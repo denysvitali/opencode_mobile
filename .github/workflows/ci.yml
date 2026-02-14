@@ -226,7 +226,7 @@ jobs:
           done
           
           # Run tests
-          flutter test integration_test/session_management_test.dart \
+          flutter test test/integration/session_management_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
           
           # Cleanup
@@ -325,7 +325,7 @@ jobs:
             sleep 1
           done
           
-          flutter test integration_test/config_auth_test.dart \
+          flutter test test/integration/config_auth_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
           
           kill $MOCK_PID $SERVER_PID 2>/dev/null || true
@@ -422,7 +422,7 @@ jobs:
             sleep 1
           done
           
-          flutter test integration_test/sse_events_full_test.dart \
+          flutter test test/integration/sse_events_full_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
           
           kill $MOCK_PID $SERVER_PID 2>/dev/null || true
@@ -519,7 +519,7 @@ jobs:
             sleep 1
           done
           
-          flutter test integration_test/streaming_message_test.dart \
+          flutter test test/integration/streaming_message_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
           
           kill $MOCK_PID $SERVER_PID 2>/dev/null || true
@@ -618,14 +618,14 @@ jobs:
           
           # Run existing integration tests (exclude the new ones tested separately)
           flutter test \
-            integration_test/api_connection_test.dart \
-            integration_test/session_lifecycle_test.dart \
-            integration_test/message_send_test.dart \
-            integration_test/sse_connection_test.dart \
-            integration_test/permission_test.dart \
-            integration_test/project_test.dart \
-            integration_test/message_send_with_model_test.dart \
-            integration_test/http_sse_test.dart \
+            test/integration/api_connection_test.dart \
+            test/integration/session_lifecycle_test.dart \
+            test/integration/message_send_test.dart \
+            test/integration/sse_connection_test.dart \
+            test/integration/permission_test.dart \
+            test/integration/project_test.dart \
+            test/integration/message_send_with_model_test.dart \
+            test/integration/http_sse_test.dart \
             --dart-define=SERVER_URL=http://localhost:4096 || TEST_EXIT=$?
           
           kill $MOCK_PID $SERVER_PID 2>/dev/null || true
