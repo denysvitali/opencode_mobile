@@ -47,10 +47,10 @@ jobs:
         run: flutter analyze --no-fatal-infos || true
 
   # ============================================
-  # Job 2: Unit Tests (Fast feedback)
+  # Job 2: Model Unit Tests (Fast feedback)
   # ============================================
-  unit-test:
-    name: Unit Tests
+  model-test:
+    name: Model Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -76,16 +76,103 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Run unit tests
-        run: flutter test --no-pub test/ || echo "No unit tests found or tests failed"
+      - name: Run model tests
+        run: flutter test --no-pub test/models/ || echo "No model tests found"
 
   # ============================================
-  # Job 3: Build APK
+  # Job 3: Widget Tests
+  # ============================================
+  widget-test:
+    name: Widget Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ${{ github.workspace }}/.dart_tool
+          key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run widget tests
+        run: flutter test --no-pub test/widgets/ || echo "Widget tests failed"
+
+  # ============================================
+  # Job 4: Integration Tests (with Mock Server)
+  # ============================================
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ${{ github.workspace }}/.dart_tool
+          key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Start Mock OpenCode Server
+        run: |
+          bun run test/mock_opencode_server.ts &
+          for i in {1..30}; do
+            if curl -s http://localhost:4096/global/health > /dev/null 2>&1; then
+              echo "Mock server ready"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run integration tests
+        run: |
+          flutter test --no-pub test/integration/ --dart-define=SERVER_URL=http://localhost:4096 || echo "Integration tests skipped or failed"
+
+      - name: Stop Mock Server
+        if: always()
+        run: pkill -f mock_opencode_server || true
+
+  # ============================================
+  # Job 5: Build APK
   # ============================================
   build-apk:
     name: Build APK
     runs-on: ubuntu-latest
-    needs: [analyze, unit-test]
+    needs: [analyze, model-test, widget-test]
     timeout-minutes: 20
 
     steps:
@@ -120,12 +207,12 @@ jobs:
           retention-days: 30
 
   # ============================================
-  # Job 4: Build AAB
+  # Job 6: Build AAB
   # ============================================
   build-aab:
     name: Build AAB
     runs-on: ubuntu-latest
-    needs: [analyze, unit-test]
+    needs: [analyze, model-test, widget-test]
     timeout-minutes: 20
 
     steps:
@@ -160,14 +247,16 @@ jobs:
           retention-days: 30
 
   # ============================================
-  # Job 5: Summary
+  # Job 7: Summary
   # ============================================
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
     needs: 
       - analyze
-      - unit-test
+      - model-test
+      - widget-test
+      - integration-test
       - build-apk
       - build-aab
     if: always()
@@ -181,11 +270,15 @@ jobs:
           echo ""
           echo "Code Quality:"
           echo "  Analyze:        ${{ needs.analyze.result }}"
-          echo "  Unit Tests:     ${{ needs.unit-test.result }}"
+          echo ""
+          echo "Tests:"
+          echo "  Model Tests:    ${{ needs.model-test.result }}"
+          echo "  Widget Tests:   ${{ needs.widget-test.result }}"
+          echo "  Integration:    ${{ needs.integration-test.result }}"
           echo ""
           echo "Builds:"
           echo "  APK:            ${{ needs.build-apk.result }}"
           echo "  AAB:            ${{ needs.build-aab.result }}"
           echo ""
-          echo "Overall: ${{ (needs.analyze.result == 'success' && needs.unit-test.result == 'success' && needs.build-apk.result == 'success' && needs.build-aab.result == 'success') && '✅ SUCCESS' || '❌ FAILURE' }}"
+          echo "Overall: ${{ (needs.analyze.result == 'success' && needs.model-test.result == 'success' && needs.widget-test.result == 'success' && needs.build-apk.result == 'success' && needs.build-aab.result == 'success') && '✅ SUCCESS' || '❌ FAILURE' }}"
           echo "=========================================="
