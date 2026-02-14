@@ -80,56 +80,26 @@ jobs:
         run: flutter test --no-pub test/ || echo "No unit tests found or tests failed"
 
   # ============================================
-  # Job 3: Cache Dependencies (Shared setup)
+  # Job 3: Build Test Infrastructure
   # ============================================
-  cache-deps:
-    name: Cache Dependencies
+  build-opencode:
+    name: Build OpenCode
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      flutter-cache-key: ${{ steps.flutter-cache.outputs.cache-key }}
-      bun-cache-key: ${{ steps.bun-cache.outputs.cache-key }}
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout mobile repository
-        uses: actions/checkout@v4
-
       - name: Checkout opencode repository
         uses: actions/checkout@v4
         with:
           repository: anomalyco/opencode
           path: opencode
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
-      - name: Cache Flutter dependencies
-        id: flutter-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ${{ github.workspace }}/.dart_tool
-            ${{ github.workspace }}/opencode_mobile/.dart_tool
-          key: pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: pub-
-
-      - name: Get Flutter dependencies
-        run: |
-          flutter pub get
-          cd opencode_mobile 2>/dev/null || true
-          flutter pub get 2>/dev/null || true
-
       - name: Cache Bun dependencies
-        id: bun-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -138,35 +108,27 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('opencode/**/bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Install Bun dependencies
-        working-directory: opencode/packages/opencode
-        run: bun install
-
       - name: Cache opencode build
         uses: actions/cache@v4
         with:
           path: opencode/packages/opencode/dist
           key: opencode-build-${{ hashFiles('opencode/**/*.ts') }}
-          restore-keys: opencode-build-
 
-      - name: Build opencode (if not cached)
+      - name: Install dependencies
         working-directory: opencode/packages/opencode
-        run: |
-          if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
-            echo "Building opencode..."
-            bun run build
-          else
-            echo "Using cached opencode build"
-          fi
+        run: bun install
+
+      - name: Build opencode
+        working-directory: opencode/packages/opencode
+        run: bun run build
 
   # ============================================
   # Job 4a: Session Management Tests
-  # Each test job runs its own servers (isolated)
   # ============================================
   test-session-management:
     name: Test - Session Management
     runs-on: ubuntu-latest
-    needs: [cache-deps, analyze]
+    needs: [build-opencode, analyze]
     timeout-minutes: 15
     continue-on-error: true
 
@@ -191,27 +153,45 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Restore Flutter cache
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ${{ github.workspace }}/.dart_tool
           key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
 
-      - name: Restore Bun cache
-        uses: actions/cache/restore@v4
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.bun/install/cache
             opencode/node_modules
           key: bun-${{ runner.os }}-${{ hashFiles('opencode/**/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
 
-      - name: Restore opencode build
-        uses: actions/cache/restore@v4
+      - name: Cache opencode build
+        uses: actions/cache@v4
         with:
           path: opencode/packages/opencode/dist
           key: opencode-build-${{ hashFiles('opencode/**/*.ts') }}
+
+      - name: Install Bun dependencies if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
+            echo "Installing Bun dependencies..."
+            bun install
+          fi
+
+      - name: Build opencode if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "Building opencode..."
+            bun run build
+          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -260,7 +240,7 @@ jobs:
   test-config-auth:
     name: Test - Config & Auth
     runs-on: ubuntu-latest
-    needs: [cache-deps, analyze]
+    needs: [build-opencode, analyze]
     timeout-minutes: 15
     continue-on-error: true
 
@@ -285,20 +265,45 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Restore caches
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ${{ github.workspace }}/.dart_tool
+          key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
             ~/.bun/install/cache
             opencode/node_modules
-            opencode/packages/opencode/dist
-          key: cache-restore-${{ github.run_id }}
-          restore-keys: |
-            pub-
-            bun-${{ runner.os }}-
-            opencode-build-
+          key: bun-${{ runner.os }}-${{ hashFiles('opencode/**/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache opencode build
+        uses: actions/cache@v4
+        with:
+          path: opencode/packages/opencode/dist
+          key: opencode-build-${{ hashFiles('opencode/**/*.ts') }}
+
+      - name: Install Bun dependencies if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
+            echo "Installing Bun dependencies..."
+            bun install
+          fi
+
+      - name: Build opencode if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "Building opencode..."
+            bun run build
+          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -332,7 +337,7 @@ jobs:
   test-sse-events:
     name: Test - SSE Events
     runs-on: ubuntu-latest
-    needs: [cache-deps, analyze]
+    needs: [build-opencode, analyze]
     timeout-minutes: 15
     continue-on-error: true
 
@@ -357,20 +362,45 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Restore caches
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ${{ github.workspace }}/.dart_tool
+          key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
             ~/.bun/install/cache
             opencode/node_modules
-            opencode/packages/opencode/dist
-          key: cache-restore-${{ github.run_id }}
-          restore-keys: |
-            pub-
-            bun-${{ runner.os }}-
-            opencode-build-
+          key: bun-${{ runner.os }}-${{ hashFiles('opencode/**/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache opencode build
+        uses: actions/cache@v4
+        with:
+          path: opencode/packages/opencode/dist
+          key: opencode-build-${{ hashFiles('opencode/**/*.ts') }}
+
+      - name: Install Bun dependencies if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
+            echo "Installing Bun dependencies..."
+            bun install
+          fi
+
+      - name: Build opencode if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "Building opencode..."
+            bun run build
+          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -404,7 +434,7 @@ jobs:
   test-streaming:
     name: Test - Streaming
     runs-on: ubuntu-latest
-    needs: [cache-deps, analyze]
+    needs: [build-opencode, analyze]
     timeout-minutes: 15
     continue-on-error: true
 
@@ -429,20 +459,45 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Restore caches
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ${{ github.workspace }}/.dart_tool
+          key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
             ~/.bun/install/cache
             opencode/node_modules
-            opencode/packages/opencode/dist
-          key: cache-restore-${{ github.run_id }}
-          restore-keys: |
-            pub-
-            bun-${{ runner.os }}-
-            opencode-build-
+          key: bun-${{ runner.os }}-${{ hashFiles('opencode/**/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache opencode build
+        uses: actions/cache@v4
+        with:
+          path: opencode/packages/opencode/dist
+          key: opencode-build-${{ hashFiles('opencode/**/*.ts') }}
+
+      - name: Install Bun dependencies if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
+            echo "Installing Bun dependencies..."
+            bun install
+          fi
+
+      - name: Build opencode if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "Building opencode..."
+            bun run build
+          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -476,7 +531,7 @@ jobs:
   test-existing:
     name: Test - Existing Integration
     runs-on: ubuntu-latest
-    needs: [cache-deps, analyze]
+    needs: [build-opencode, analyze]
     timeout-minutes: 15
     continue-on-error: true
 
@@ -501,20 +556,45 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Restore caches
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
             ${{ github.workspace }}/.dart_tool
+          key: pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: pub-
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
             ~/.bun/install/cache
             opencode/node_modules
-            opencode/packages/opencode/dist
-          key: cache-restore-${{ github.run_id }}
-          restore-keys: |
-            pub-
-            bun-${{ runner.os }}-
-            opencode-build-
+          key: bun-${{ runner.os }}-${{ hashFiles('opencode/**/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache opencode build
+        uses: actions/cache@v4
+        with:
+          path: opencode/packages/opencode/dist
+          key: opencode-build-${{ hashFiles('opencode/**/*.ts') }}
+
+      - name: Install Bun dependencies if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "node_modules" ] || [ -z "$(ls -A node_modules 2>/dev/null)" ]; then
+            echo "Installing Bun dependencies..."
+            bun install
+          fi
+
+      - name: Build opencode if needed
+        working-directory: opencode/packages/opencode
+        run: |
+          if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "Building opencode..."
+            bun run build
+          fi
 
       - name: Get Flutter dependencies
         run: flutter pub get
@@ -557,7 +637,7 @@ jobs:
   build-apk:
     name: Build APK
     runs-on: ubuntu-latest
-    needs: [analyze, unit-test, cache-deps]
+    needs: [analyze, unit-test]
     timeout-minutes: 20
 
     steps:
@@ -570,8 +650,8 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Restore Flutter cache
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
@@ -597,7 +677,7 @@ jobs:
   build-aab:
     name: Build AAB
     runs-on: ubuntu-latest
-    needs: [analyze, unit-test, cache-deps]
+    needs: [analyze, unit-test]
     timeout-minutes: 20
 
     steps:
@@ -610,8 +690,8 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Restore Flutter cache
-        uses: actions/cache/restore@v4
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.pub-cache
