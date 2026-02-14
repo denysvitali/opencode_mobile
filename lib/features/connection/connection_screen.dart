@@ -107,7 +107,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
       );
 
       if (success && mounted) {
-        context.go('/sessions');
+        context.go('/');
       }
     } finally {
       if (mounted) {
