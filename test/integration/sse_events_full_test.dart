@@ -21,7 +21,7 @@ void main() {
 
   setUpAll(() async {
     if (serverUrl.isEmpty) {
-      fail('SERVER_URL must be provided via --dart-define=SERVER_URL=<url>');
+      markTestSkipped('SERVER_URL must be provided via --dart-define=SERVER_URL=<url>. Integration tests require a running OpenCode server.');
     }
 
     print('=== SSE Events Comprehensive Test ===');
