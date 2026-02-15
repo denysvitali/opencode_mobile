@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers/connection_provider.dart';
+import '../../core/providers/model_selection_provider.dart';
 
 class ConnectionScreen extends ConsumerStatefulWidget {
   const ConnectionScreen({super.key});
@@ -107,6 +108,8 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
       );
 
       if (success && mounted) {
+        // Pre-fetch providers for faster model selection
+        ref.read(providersProvider.notifier).fetch();
         context.go('/');
       }
     } finally {
@@ -159,6 +162,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                     ),
                     const SizedBox(height: 32),
                     TextFormField(
+                      key: const Key('serverUrlField'),
                       controller: _urlController,
                       decoration: const InputDecoration(
                         labelText: 'Server URL',
@@ -172,6 +176,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
+                      key: const Key('usernameField'),
                       controller: _usernameController,
                       decoration: const InputDecoration(
                         labelText: 'Username (optional)',
@@ -181,11 +186,13 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
+                      key: const Key('passwordField'),
                       controller: _passwordController,
                       decoration: InputDecoration(
                         labelText: 'Password (optional)',
                         prefixIcon: const Icon(Icons.lock),
                         suffixIcon: IconButton(
+                          key: const Key('passwordVisibilityToggle'),
                           icon: Icon(
                             _obscurePassword ? Icons.visibility : Icons.visibility_off,
                           ),
@@ -207,6 +214,7 @@ class _ConnectionScreenState extends ConsumerState<ConnectionScreen> {
                       const Center(child: CircularProgressIndicator())
                     else
                       ElevatedButton(
+                        key: const Key('connectButton'),
                         onPressed: isConnecting ? null : _connect,
                         child: const Text('Connect'),
                       ),

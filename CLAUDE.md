@@ -4,96 +4,109 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenCode Mobile is a Flutter mobile client for the [OpenCode](https://github.com/opencode-ai/opencode) AI assistant server. It connects to a running `opencode serve` instance and provides a mobile interface for chatting with the AI, viewing tool executions, and managing sessions.
+OpenCode Mobile is a Flutter mobile client for the [OpenCode](https://github.com/opencode-ai/opencode) AI assistant server. The server code is located at `../opencode` relative to this repository. The app connects to a running `opencode serve` instance (default `http://localhost:4096`) and provides a mobile interface for chatting with the AI, viewing tool executions, managing sessions, and handling permission requests.
 
 ## Devenv Environment
 
 This project uses [devenv](https://devenv.sh/) for reproducible development environments. Before running any Flutter commands, check if you're in a devenv shell:
 
-- If the environment variable `IN_NIX_SHELL` is set, you're in a devenv shell
+- If the environment variable `IN_NIX_SHELL` is set, you're already in a devenv shell
 - If not, prefix all commands with `devenv shell`:
   ```bash
   devenv shell flutter pub get
   devenv shell flutter run
   ```
 
+## Testing
+
+Testing is required. All changes must pass `flutter analyze` and `flutter test` before being considered complete. Do not skip these steps.
+
+For UI and integration work, always build and test on a real Android device. The emulator does not reliably reproduce Cronet behavior, network security config, or real-world performance, so changes that only pass on the emulator are not considered tested.
+
+When writing tests, write general-purpose solutions. Do not hard-code values or create solutions that only work for specific test inputs. If a test is incorrect or infeasible, flag it rather than working around it.
+
+## Working with Code
+
+Read the relevant source files before making changes. Do not speculate about code you have not opened. If a file is referenced, open it and verify its structure before editing.
+
+When making changes, implement them directly rather than only suggesting them. Keep changes focused on what was requested — do not add features, refactor surrounding code, or introduce abstractions beyond what is needed.
+
+If you create temporary files or scripts during development, clean them up before finishing.
+
 ## Commands
 
-### Development
 ```bash
-flutter pub get          # Install dependencies
-flutter run              # Run the app (requires connected device/emulator)
-flutter analyze          # Run static analysis/linting
-flutter test             # Run tests
-```
-
-### Building
-```bash
-flutter build apk --release              # Build Android APK
+flutter pub get                          # Install dependencies
+flutter analyze                          # Static analysis (CI uses --no-fatal-infos)
+flutter test                             # Run all tests
+flutter test test/integration/api_connection_test.dart  # Run a single test file
+flutter run                              # Run on connected device (always prefer a real device)
+flutter build apk --release              # Build Android APK -> build/app/outputs/flutter-apk/app-release.apk
 flutter build appbundle --release        # Build Android App Bundle
 ```
 
-APK output: `build/app/outputs/flutter-apk/app-release.apk`
+### Integration Tests
+
+Integration tests live in `test/integration/` and require a running OpenCode server (start one with `cd ../opencode && go run ./cmd/opencode serve`). They are run as unit tests (not device tests) with `--dart-define`:
+
+```bash
+flutter test --dart-define=SERVER_URL=http://localhost:4096 test/integration/
+```
 
 ## Architecture
 
-### State Management
-- **Riverpod 3.x** with Notifier pattern for all providers
-- Providers are in `lib/core/providers/`
-- Provider families used for parameterized providers (e.g., session-specific state)
+### Data Flow
 
-### Routing
-- **GoRouter** for declarative routing
-- Routes defined in `main.dart`:
-  - `/` - Redirects to sessions list
-  - `/sessions` - Session list screen
-  - `/chat/:sessionId` - Chat screen for a specific session
-  - `/settings` - App settings
+The app follows a unidirectional data flow: UI -> Provider (Notifier) -> API Client -> Server. Real-time updates flow back via Server -> SSE Client -> StreamProvider -> UI.
+
+### Singleton Services
+
+`OpenCodeClient`, `SSEClient`, `StorageService`, and `PlatformHttpClient` are all singletons (private constructor + factory). They are accessed directly (e.g., `OpenCodeClient()`) rather than through dependency injection.
+
+### State Management (Riverpod)
+
+All providers use `Notifier` + `NotifierProvider` pattern with immutable state classes using `copyWith`. Each state class (`ChatState`, `SessionsState`, `ConnectionState`, etc.) holds `isLoading`, `error`, and domain data.
+
+Key providers in `lib/core/providers/`:
+- `connectionProvider` — manages server connection lifecycle; `ConnectionGate` widget in `main.dart` gates all routes behind connection
+- `chatProvider` — single global instance for current chat (messages loaded per sessionId via method calls, not provider families)
+- `sessionsProvider` — session list with CRUD operations
+- `projectsProvider` — project listing
+- `permissionsProvider` — pending tool permission requests from the AI
+- `modelSelectionProvider` — persisted provider/model selection
+
+SSE streams are exposed as `StreamProvider`s (e.g., `sseMessageProvider`, `sseSessionUpdateProvider`, `ssePermissionProvider`) and consumed via `ref.listen` in screens.
+
+### Real-Time Events (SSE)
+
+`SSEClient` manages two types of SSE connections:
+- Global (`/global/event`): installation updates, server lifecycle
+- Per-project (`/event?directory=...`): message updates, session CRUD, permission requests, file edits
+
+Events are dispatched to typed broadcast `StreamController`s. The client handles reconnection with exponential backoff (max 5 attempts).
 
 ### HTTP Client
-- Uses **Cronet HTTP** on Android to honor user-installed CA certificates (important for self-signed certs in development)
-- Falls back to standard HTTP client if Cronet fails
-- HTTP client wrapper in `lib/core/http/http_client.dart`
 
-### API Layer
-- `OpenCodeClient` (`lib/core/api/opencode_client.dart`): REST API client for server communication
-- `SSEClient` (`lib/core/api/sse_client.dart`): WebSocket-based Server-Sent Events for real-time message streaming
+`PlatformHttpClient` (`lib/core/http/http_client.dart`) uses Cronet on Android to honor user-installed CA certificates (critical for self-signed certs). Falls back to `dart:io` `http.Client` on other platforms or if Cronet fails. Both `OpenCodeClient` (REST) and `SSEClient` (streaming) use this shared client.
 
-### Data Models
-- Located in `lib/core/models/`
-- Use `fromJson`/`toJson` serialization
-- Key models: `Session`, `Message`, `Config`, `Permission`, `Project`
+### Routing
 
-### Storage
-- `SharedPreferences`: Server URL, username, theme preference
-- `FlutterSecureStorage`: Passwords (encrypted on device)
+GoRouter with a `ConnectionGate` wrapper widget — all routes redirect to `ConnectionScreen` when not connected:
+- `/` and `/projects` — project list
+- `/sessions?projectId=` — session list (filtered by project)
+- `/chat/:sessionId` — chat interface
+- `/settings` — app settings with theme control
 
-## Feature Structure
+### Message Model
 
-Features are organized in `lib/features/` by domain:
-- `connection/`: Server connection UI and configuration
-- `sessions/`: Session list and creation dialog
-- `chat/`: Chat interface with message bubbles and tool cards
-- `settings/`: App settings screen
-
-Each feature typically contains:
-- A main screen/widget
-- A `widgets/` subdirectory for composed components
-
-## Server Connection
-
-The app connects to an OpenCode server running `opencode serve`. Default URL is `http://localhost:4096`. The server may have HTTP Basic Authentication enabled via `OPENCODE_SERVER_PASSWORD` environment variable.
+Messages contain typed `MessagePart`s: `text`, `reasoning`, `tool` (with state machine: pending -> running -> completed/error), `file`, `stepStart`/`stepFinish`, `snapshot`, `patch`, `error`. The server uses camelCase JSON keys like `sessionID`, `parentID`, `providerID`.
 
 ## Android-Specific Notes
 
-- Cleartext traffic is enabled in `AndroidManifest.xml` for HTTP development
-- Network security config trusts system and user CA certificates
-- Minimum SDK version is controlled by Flutter's default
-- Java 17 is required for building
+- Cleartext HTTP traffic enabled in `AndroidManifest.xml` for local development
+- Network security config trusts both system and user CA certificates
+- Java 17 required for building
 
-## CI/CD
+## CI
 
-GitHub Actions workflow at `.github/workflows/build.yml`:
-1. Runs `flutter analyze`
-2. Runs `flutter test --no-pub`
-3. Builds APK and App Bundle
+GitHub Actions at `.github/workflows/ci.yml` runs: analyze -> unit tests -> build APK + AAB (parallel after tests pass). Artifacts uploaded with 30-day retention.

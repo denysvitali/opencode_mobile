@@ -16,13 +16,14 @@ class ProviderModel {
   });
 
   factory ProviderModel.fromJson(Map<String, dynamic> json) {
+    final limit = json['limit'] as Map<String, dynamic>?;
     return ProviderModel(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      costInput: (json['cost'] as Map<String, dynamic>?)?['input'] as double?,
-      costOutput: (json['cost'] as Map<String, dynamic>?)?['output'] as double?,
-      contextWindow: json['context'] as int?,
-      maxOutput: json['limit'] as int?,
+      costInput: ((json['cost'] as Map<String, dynamic>?)?['input'] as num?)?.toDouble(),
+      costOutput: ((json['cost'] as Map<String, dynamic>?)?['output'] as num?)?.toDouble(),
+      contextWindow: (limit?['context'] as num?)?.toInt(),
+      maxOutput: (limit?['output'] as num?)?.toInt(),
     );
   }
 
@@ -35,8 +36,11 @@ class ProviderModel {
           if (costInput != null) 'input': costInput,
           if (costOutput != null) 'output': costOutput,
         },
-      if (contextWindow != null) 'context': contextWindow,
-      if (maxOutput != null) 'limit': maxOutput,
+      if (contextWindow != null || maxOutput != null)
+        'limit': {
+          if (contextWindow != null) 'context': contextWindow,
+          if (maxOutput != null) 'output': maxOutput,
+        },
     };
   }
 }
@@ -61,13 +65,14 @@ class Provider {
     if (modelsData is Map<String, dynamic>) {
       modelsList = modelsData.entries.map((e) {
         final modelData = e.value as Map<String, dynamic>? ?? {};
+        final limit = modelData['limit'] as Map<String, dynamic>?;
         return ProviderModel(
           id: e.key,
           name: modelData['name'] as String? ?? e.key,
-          costInput: (modelData['cost'] as Map<String, dynamic>?)?['input'] as double?,
-          costOutput: (modelData['cost'] as Map<String, dynamic>?)?['output'] as double?,
-          contextWindow: modelData['context'] as int?,
-          maxOutput: modelData['limit'] as int?,
+          costInput: ((modelData['cost'] as Map<String, dynamic>?)?['input'] as num?)?.toDouble(),
+          costOutput: ((modelData['cost'] as Map<String, dynamic>?)?['output'] as num?)?.toDouble(),
+          contextWindow: (limit?['context'] as num?)?.toInt(),
+          maxOutput: (limit?['output'] as num?)?.toInt(),
         );
       }).toList();
     } else if (modelsData is List<dynamic>) {

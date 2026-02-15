@@ -111,26 +111,32 @@ class SettingsScreen extends ConsumerWidget {
   }
 
   Widget _buildProvidersListTile(BuildContext context, WidgetRef ref) {
-    final providersAsync = ref.watch(providersProvider);
+    final providersState = ref.watch(providersProvider);
+
+    String subtitle;
+    if (providersState.isLoading) {
+      subtitle = 'Loading...';
+    } else if (providersState.error != null) {
+      subtitle = 'Unable to load';
+    } else if (providersState.providers.isEmpty) {
+      subtitle = 'No models available';
+    } else {
+      subtitle = '${providersState.providers.length} provider(s) available';
+    }
 
     return ListTile(
       leading: const Icon(Icons.model_training),
       title: const Text('Available Models'),
-      subtitle: providersAsync.when(
-        data: (providers) => Text(
-          providers.isEmpty
-              ? 'No models available'
-              : '${providers.length} provider(s) available',
-        ),
-        loading: () => const Text('Loading...'),
-        error: (_, __) => const Text('Unable to load'),
-      ),
+      subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
-      onTap: () => _showProvidersDialog(context, providersAsync),
+      onTap: () => _showProvidersDialog(context, ref),
     );
   }
 
-  void _showProvidersDialog(BuildContext context, AsyncValue<List<models.Provider>> providersAsync) {
+  void _showProvidersDialog(BuildContext context, WidgetRef ref) {
+    // Trigger fetch when dialog opens
+    ref.read(providersProvider.notifier).fetch();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -160,60 +166,83 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: providersAsync.when(
-                data: (providers) => providers.isEmpty
-                    ? const Center(
-                        child: Text('No models available'),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: providers.length,
-                        itemBuilder: (context, index) {
-                          final provider = providers[index];
-                          return ExpansionTile(
-                            leading: Icon(
-                              provider.configured
-                                  ? Icons.star
-                                  : Icons.cloud_outlined,
-                              color: provider.configured
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
-                            ),
-                            title: Text(provider.name),
-                            subtitle: provider.configured
-                                ? const Text('Configured')
-                                : null,
-                            children: provider.models.map((model) {
-                              return ListTile(
-                                dense: true,
-                                contentPadding: const EdgeInsets.only(left: 72, right: 16),
-                                title: Text(model.name),
-                                trailing: provider.configured && provider.models.indexOf(model) == 0
-                                    ? Chip(
-                                        label: const Text('Default'),
-                                        labelStyle: const TextStyle(fontSize: 10),
-                                        padding: EdgeInsets.zero,
-                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      )
-                                    : null,
-                              );
-                            }).toList(),
-                          );
-                        },
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final providersState = ref.watch(providersProvider);
+
+                  if (providersState.isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  if (providersState.error != null) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48),
+                          const SizedBox(height: 16),
+                          Text('Error loading providers: ${providersState.error}'),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => ref.read(providersProvider.notifier).fetch(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                error: (error, _) => Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, size: 48),
-                      const SizedBox(height: 16),
-                      Text('Error loading providers: $error'),
-                    ],
-                  ),
-                ),
+                    );
+                  }
+
+                  final providers = providersState.providers;
+                  if (providers.isEmpty) {
+                    return const Center(
+                      child: Text('No models available'),
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () => ref.read(providersProvider.notifier).fetch(),
+                    child: ListView.builder(
+                      controller: scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: providers.length,
+                      itemBuilder: (context, index) {
+                        final provider = providers[index];
+                        return ExpansionTile(
+                          leading: Icon(
+                            provider.configured
+                                ? Icons.star
+                                : Icons.cloud_outlined,
+                            color: provider.configured
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                          ),
+                          title: Text(provider.name),
+                          subtitle: provider.configured
+                              ? const Text('Configured')
+                              : null,
+                          children: provider.models.map((model) {
+                            return ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.only(left: 72, right: 16),
+                              title: Text(model.name),
+                              trailing: provider.configured && provider.models.indexOf(model) == 0
+                                  ? Chip(
+                                      label: const Text('Default'),
+                                      labelStyle: const TextStyle(fontSize: 10),
+                                      padding: EdgeInsets.zero,
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    )
+                                  : null,
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             ),
           ],

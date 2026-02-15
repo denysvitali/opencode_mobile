@@ -1,16 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/message.dart';
+import '../../../core/providers/chat_provider.dart';
 import 'message_bubble.dart';
 
 class MessageList extends StatefulWidget {
   final List<Message> messages;
+  final List<PendingMessage> pendingMessages;
   final ScrollController scrollController;
+  final void Function(String pendingId)? onRetry;
+  final void Function(String pendingId)? onDismiss;
 
   const MessageList({
     super.key,
     required this.messages,
+    this.pendingMessages = const [],
     required this.scrollController,
+    this.onRetry,
+    this.onDismiss,
   });
 
   @override
@@ -20,12 +27,27 @@ class MessageList extends StatefulWidget {
 class _MessageListState extends State<MessageList> {
   @override
   Widget build(BuildContext context) {
-    if (widget.messages.isEmpty) {
+    if (widget.messages.isEmpty && widget.pendingMessages.isEmpty) {
       return _EmptyState();
     }
 
     // Build list with date separators and grouped messages
     final items = <Widget>[];
+
+    // Add pending messages first (they appear at the bottom since list is reversed)
+    for (int i = 0; i < widget.pendingMessages.length; i++) {
+      final pending = widget.pendingMessages[i];
+      items.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: _PendingMessageBubble(
+            pending: pending,
+            onRetry: widget.onRetry,
+            onDismiss: widget.onDismiss,
+          ),
+        ),
+      );
+    }
 
     for (int i = 0; i < widget.messages.length; i++) {
       final message = widget.messages[widget.messages.length - 1 - i];
@@ -242,6 +264,161 @@ class _SuggestionChip extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PendingMessageBubble extends StatelessWidget {
+  final PendingMessage pending;
+  final void Function(String pendingId)? onRetry;
+  final void Function(String pendingId)? onDismiss;
+
+  const _PendingMessageBubble({
+    required this.pending,
+    this.onRetry,
+    this.onDismiss,
+  });
+
+  String _formatTimestamp(DateTime dateTime) {
+    return 'Just now';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 48, right: 0, top: 8, bottom: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: pending.error != null
+                        ? Theme.of(context).colorScheme.errorContainer
+                        : Theme.of(context).colorScheme.primary.withOpacity(0.8),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(18),
+                      topRight: Radius.circular(18),
+                      bottomLeft: Radius.circular(18),
+                      bottomRight: Radius.circular(4),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        pending.text,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      if (pending.isSending) ...[
+                        const SizedBox(height: 8),
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (pending.error != null) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            pending.error!,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        onPressed: onRetry != null ? () => onRetry!(pending.id) : null,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: const Text('Retry'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: onDismiss != null ? () => onDismiss!(pending.id) : null,
+                        icon: const Icon(Icons.close, size: 16),
+                        label: const Text('Dismiss'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 4),
+                    child: Text(
+                      _formatTimestamp(pending.createdAt),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: 11,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.5),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.person,
+              size: 18,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

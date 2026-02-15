@@ -63,6 +63,7 @@ class _MessageInputState extends State<MessageInput> {
         children: [
           Expanded(
             child: TextField(
+              key: const Key('messageInput'),
               controller: _controller,
               enabled: !widget.isLoading,
               decoration: const InputDecoration(
@@ -78,6 +79,7 @@ class _MessageInputState extends State<MessageInput> {
           ),
           const SizedBox(width: 8),
           IconButton(
+            key: const Key('sendButton'),
             onPressed: _hasText && !widget.isLoading ? _send : null,
             icon: widget.isLoading
                 ? const SizedBox(

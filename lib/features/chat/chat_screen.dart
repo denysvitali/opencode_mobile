@@ -58,6 +58,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
   }
 
+  Future<void> _retryMessage(String pendingId) async {
+    final selection = ref.read(modelSelectionProvider);
+    await ref.read(chatProvider.notifier).retryPendingMessage(
+          pendingId,
+          widget.sessionId,
+          providerID: selection.isDefault ? null : selection.providerID,
+          modelID: selection.isDefault ? null : selection.modelID,
+        );
+    _scrollToBottom();
+  }
+
+  void _dismissPendingMessage(String pendingId) {
+    ref.read(chatProvider.notifier).removePendingMessage(pendingId);
+  }
+
   String _getSessionTitle() {
     final sessionsState = ref.read(sessionsProvider);
     final session = sessionsState.sessions
@@ -104,6 +119,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         actions: [
           if (chatState.isStreaming)
             IconButton(
+              key: const Key('stopButton'),
               icon: const Icon(Icons.stop_circle_outlined),
               tooltip: 'Abort',
               onPressed: () {
@@ -146,7 +162,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : MessageList(
                     messages: chatState.messages,
+                    pendingMessages: chatState.pendingMessages,
                     scrollController: _scrollController,
+                    onRetry: (pendingId) => _retryMessage(pendingId),
+                    onDismiss: (pendingId) => _dismissPendingMessage(pendingId),
                   ),
           ),
           const ModelSelector(),

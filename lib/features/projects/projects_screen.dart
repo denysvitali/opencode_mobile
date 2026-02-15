@@ -79,6 +79,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
         title: const Text('Projects'),
         actions: [
           IconButton(
+            key: const Key('settingsButton'),
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/settings'),
           ),
@@ -91,6 +92,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
               sessionsState.sessions,
             ),
       floatingActionButton: FloatingActionButton(
+        key: const Key('newSessionFab'),
         onPressed: _createSession,
         child: const Icon(Icons.add),
       ),
@@ -118,6 +120,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
         children: [
           // All Sessions option
           _AllSessionsCard(
+            key: const Key('allSessionsCard'),
             sessionCount: totalSessions,
             onTap: () => context.push('/sessions'),
           ),
@@ -134,12 +137,13 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 ),
               ),
             ),
-            ...projects.map((project) => Padding(
+            ...projects.asMap().entries.map((entry) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _ProjectCard(
-                project: project,
-                sessionCount: sessionCounts[project.id] ?? 0,
-                onTap: () => context.push('/sessions?projectId=${project.id}'),
+                key: Key('projectCard_${entry.key}'),
+                project: entry.value,
+                sessionCount: sessionCounts[entry.value.id] ?? 0,
+                onTap: () => context.push('/sessions?projectId=${entry.value.id}'),
               ),
             )),
           ],
@@ -183,6 +187,7 @@ class _AllSessionsCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _AllSessionsCard({
+    super.key,
     required this.sessionCount,
     required this.onTap,
   });
@@ -247,6 +252,7 @@ class _ProjectCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ProjectCard({
+    super.key,
     required this.project,
     required this.sessionCount,
     required this.onTap,

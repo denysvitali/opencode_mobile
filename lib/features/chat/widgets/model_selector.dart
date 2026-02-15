@@ -16,6 +16,7 @@ class ModelSelector extends ConsumerWidget {
       child: Align(
         alignment: Alignment.centerLeft,
         child: ActionChip(
+          key: const Key('modelSelectorButton'),
           avatar: Icon(
             selection.isDefault ? Icons.auto_awesome : Icons.model_training,
             size: 16,
@@ -33,7 +34,8 @@ class ModelSelector extends ConsumerWidget {
   }
 
   void _showModelPicker(BuildContext context, WidgetRef ref) {
-    final providersAsync = ref.read(providersProvider);
+    // Trigger fetch when modal opens
+    ref.read(providersProvider.notifier).fetch();
     final currentSelection = ref.read(modelSelectionProvider);
 
     showModalBottomSheet(
@@ -65,27 +67,46 @@ class ModelSelector extends ConsumerWidget {
             ),
             const Divider(height: 1),
             Expanded(
-              child: providersAsync.when(
-                data: (providers) => _buildProviderList(
-                  context,
-                  ref,
-                  scrollController,
-                  providers,
-                  currentSelection,
-                ),
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                error: (error, _) => Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline, size: 48),
-                      const SizedBox(height: 16),
-                      Text('Error loading providers: $error'),
-                    ],
-                  ),
-                ),
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final providersState = ref.watch(providersProvider);
+
+                  if (providersState.isLoading) {
+                    return const Center(
+                      child: CircularProgressIndicator(),
+                    );
+                  }
+
+                  if (providersState.error != null) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48),
+                          const SizedBox(height: 16),
+                          Text('Error loading providers: ${providersState.error}'),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: () => ref.read(providersProvider.notifier).fetch(),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return RefreshIndicator(
+                    onRefresh: () => ref.read(providersProvider.notifier).fetch(),
+                    child: _buildProviderList(
+                      context,
+                      ref,
+                      scrollController,
+                      providersState.providers,
+                      currentSelection,
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -101,8 +122,38 @@ class ModelSelector extends ConsumerWidget {
     List<models.Provider> providers,
     ModelSelection currentSelection,
   ) {
+    if (providers.isEmpty) {
+      return ListView(
+        controller: scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 100),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cloud_off,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No providers available',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return ListView(
       controller: scrollController,
+      physics: const AlwaysScrollableScrollPhysics(),
       children: [
         ListTile(
           leading: const Icon(Icons.auto_awesome),

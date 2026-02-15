@@ -140,6 +140,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                   projectsState.projectMap,
                 ),
       floatingActionButton: FloatingActionButton(
+        key: const Key('newSessionFab'),
         onPressed: _createSession,
         child: const Icon(Icons.add),
       ),
@@ -189,6 +190,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
           itemBuilder: (context, index) {
             final session = sessions[index];
             return _SessionTile(
+              key: Key('sessionTile_${session.id}'),
               session: session,
               onTap: () => context.push('/chat/${session.id}'),
               onDelete: () => _deleteSession(session),
@@ -293,6 +295,7 @@ class _SessionTile extends StatelessWidget {
   final VoidCallback onDelete;
 
   const _SessionTile({
+    super.key,
     required this.session,
     required this.onTap,
     required this.onDelete,
