@@ -36,12 +36,8 @@ void main() {
 
     try {
       // Send a message
-      final response = await client.sendMessage(
-        session.id,
-        text: 'Hello, this is an integration test.',
-      );
+      final response = await client.sendPrompt(session.id, text: 'Hello, this is an integration test.');
       expect(response.id, isNotEmpty);
-      expect(response.sessionId, isNotEmpty);
 
       // Get messages
       final messages = await client.getMessages(session.id);

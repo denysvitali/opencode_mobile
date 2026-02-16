@@ -80,12 +80,7 @@ void main() {
           reason: 'SSE should be connected');
 
       print('\n--- Step 4: Send Message ---');
-      final response = await client.sendMessage(
-        session.id,
-        text: 'hello',
-      );
-      print('sendMessage response: id=${response.id}, role=${response.role}');
-      expect(response.id, isNotEmpty);
+      await client.sendPrompt(session.id, text: 'hello');
 
       print('\n--- Step 5: Wait for SSE update (timeout 30s) ---');
 

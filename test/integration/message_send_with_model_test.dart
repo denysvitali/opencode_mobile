@@ -45,12 +45,7 @@ void main() {
 
     try {
       print('\n--- Step 3: Send Message (default model) ---');
-      final response = await client.sendMessage(
-        session.id,
-        text: 'Say just the word "hello" and nothing else.',
-      );
-      print('sendMessage response: id=${response.id}, role=${response.role}');
-      expect(response.id, isNotEmpty);
+      await client.sendPrompt(session.id, text: 'Say just the word "hello" and nothing else.');
 
       print('\n--- Step 4: Poll for messages ---');
       List<dynamic> messages = [];
@@ -85,7 +80,8 @@ void main() {
     expect(health.healthy, isTrue, reason: 'Server should be healthy: ${health.error}');
 
     print('\n--- Step 2: Fetch Providers ---');
-    final providers = await client.getProviders();
+    final providersResponse = await client.getConfigProviders();
+    final providers = providersResponse.providers;
     print('Providers: ${providers.length}');
     expect(providers, isNotEmpty, reason: 'Server should have at least one provider');
 
@@ -106,15 +102,12 @@ void main() {
 
     try {
       print('\n--- Step 4: Send Message (explicit model) ---');
-      final response = await client.sendMessage(
+      await client.sendPrompt(
         session.id,
         text: 'Say just the word "hello" and nothing else.',
         providerID: provider.id,
         modelID: modelId,
       );
-      print('sendMessage response: id=${response.id}, role=${response.role}, sessionId=${response.sessionId}');
-      // Note: Server may return empty body when using explicit model, so id may be empty
-      expect(response.sessionId, isNotEmpty);
 
       // Wait a moment for the message to be stored
       await Future.delayed(const Duration(seconds: 2));

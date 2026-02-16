@@ -6,6 +6,7 @@ import 'package:cronet_http/cronet_http.dart';
 class PlatformHttpClient {
   http.Client? _cronetClient;
   http.Client? _fallbackClient;
+  http.Client? _testClient;
   bool _cronetFailed = false;
   bool _initialized = false;
 
@@ -36,10 +37,15 @@ class PlatformHttpClient {
   }
 
   http.Client get client {
+    if (_testClient != null) return _testClient!;
     if (Platform.isAndroid && _cronetClient != null && !_cronetFailed) {
       return _cronetClient!;
     }
     return _fallbackClient ?? http.Client();
+  }
+
+  void setTestClient(http.Client? client) {
+    _testClient = client;
   }
 
   bool get isUsingCronet => Platform.isAndroid && _cronetClient != null && !_cronetFailed;

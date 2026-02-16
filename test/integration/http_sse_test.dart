@@ -94,7 +94,7 @@ void main() {
 
     try {
       print('\n--- Step 4: Send message ---');
-      await client.sendMessage(session.id, text: 'hello');
+        await client.sendPrompt(session.id, text: 'hello');
       print('Message sent');
 
       // Wait for message events

@@ -46,6 +46,21 @@ class ProjectsNotifier extends Notifier<ProjectsState> {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
+
+  void addProject(Project project) {
+    final exists = state.projects.any((p) => p.id == project.id);
+    if (!exists) {
+      state = state.copyWith(
+        projects: [project, ...state.projects],
+      );
+    }
+  }
+
+  void removeProject(String projectId) {
+    state = state.copyWith(
+      projects: state.projects.where((p) => p.id != projectId).toList(),
+    );
+  }
 }
 
 final projectsProvider = NotifierProvider<ProjectsNotifier, ProjectsState>(

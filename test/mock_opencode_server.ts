@@ -19,9 +19,10 @@ function generateId(prefix: string): string {
   return `${prefix}-${Date.now()}-${++sessionCounter}`;
 }
 
-function createSession(body: any) {
+function createSession(body: any, directory?: string) {
   const id = generateId('session');
   const now = Date.now();
+  const sessionPath = directory || body?.directory || '/test';
   const session = {
     id,
     parentID: body?.parentID || null,
@@ -31,7 +32,7 @@ function createSession(body: any) {
     time: {
       created: now,
     },
-    path: { cwd: '/test' },
+    path: { cwd: sessionPath },
     projectID: null,
     permission: body?.permission || null,
   };
@@ -66,6 +67,43 @@ function sseHeaders() {
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
   };
+}
+
+function handleSSE(req: Request): Response {
+  const stream = new ReadableStream({
+    start(controller) {
+      sseClients.add(controller);
+      
+      // Send initial connection event
+      const encoder = new TextEncoder();
+      controller.enqueue(encoder.encode('event: connected\ndata: {"status":"connected"}\n\n'));
+      
+      // Heartbeat every 30 seconds to keep connection alive
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(': heartbeat\n\n'));
+        } catch (e) {
+          clearInterval(heartbeat);
+          sseClients.delete(controller);
+        }
+      }, 30000);
+      
+      req.signal.addEventListener('abort', () => {
+        clearInterval(heartbeat);
+        sseClients.delete(controller);
+        try {
+          controller.close();
+        } catch (e) {}
+      });
+    },
+    cancel() {
+      // Client disconnected
+    }
+  });
+
+  return new Response(stream, {
+    headers: sseHeaders(),
+  });
 }
 
 function corsHeaders(extraHeaders: Record<string, string> = {}) {
@@ -124,25 +162,25 @@ async function handleRequest(req: Request): Promise<Response> {
       });
     }
 
-    // SSE endpoint - check Accept header or path
+    // SSE endpoints - check Accept header or path
     const accept = req.headers.get('Accept') || '';
+    
+    // Global SSE events - /global/event
+    if (path === '/global/event' && (method === 'GET' || accept.includes('text/event-stream'))) {
+      return handleSSE(req);
+    }
+    
+    // Project SSE events - /event (with optional directory query param)
     if (path === '/event' && (method === 'GET' || accept.includes('text/event-stream'))) {
-      const stream = new ReadableStream({
-        start(controller) {
-          sseClients.add(controller);
-          
-          // Send initial connection event
-          const encoder = new TextEncoder();
-          controller.enqueue(encoder.encode('event: connected\ndata: {"status":"connected"}\n\n'));
-          
-          // Heartbeat every 30 seconds to keep connection alive
-          const heartbeat = setInterval(() => {
-            try {
-              controller.enqueue(encoder.encode(': heartbeat\n\n'));
-            } catch (e) {
-              clearInterval(heartbeat);
-              sseClients.delete(controller);
-            }
+      return handleSSE(req);
+    }
+
+    // Health check
+    if (path === '/global/health') {
+      return new Response(JSON.stringify({ status: 'ok' }), { 
+        headers: { ...headers, 'Content-Type': 'application/json' } 
+      });
+    }
           }, 30000);
           
           req.signal.addEventListener('abort', () => {
@@ -165,8 +203,42 @@ async function handleRequest(req: Request): Promise<Response> {
 
     // Session list - GET /session
     if (path === '/session' && method === 'GET') {
-      const allSessions = Array.from(sessions.values());
-      return new Response(JSON.stringify(allSessions), {
+      const url = new URL(req.url);
+      const searchQuery = url.searchParams.get('search');
+      const rootsOnly = url.searchParams.get('roots') === 'true';
+      const limitParam = url.searchParams.get('limit');
+      const directoryParam = url.searchParams.get('directory');
+      
+      let filteredSessions = Array.from(sessions.values());
+      
+      // Filter by search query (title contains search term)
+      if (searchQuery) {
+        filteredSessions = filteredSessions.filter((s: any) => 
+          s.title && s.title.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      
+      // Filter by roots only (sessions without parentID)
+      if (rootsOnly) {
+        filteredSessions = filteredSessions.filter((s: any) => !s.parentID);
+      }
+      
+      // Filter by directory (path matches)
+      if (directoryParam) {
+        filteredSessions = filteredSessions.filter((s: any) => 
+          s.path && s.path.cwd === directoryParam
+        );
+      }
+      
+      // Apply limit
+      if (limitParam) {
+        const limit = parseInt(limitParam, 10);
+        if (!isNaN(limit) && limit > 0) {
+          filteredSessions = filteredSessions.slice(0, limit);
+        }
+      }
+      
+      return new Response(JSON.stringify(filteredSessions), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
@@ -174,7 +246,9 @@ async function handleRequest(req: Request): Promise<Response> {
     // Create session - POST /session
     if (path === '/session' && method === 'POST') {
       const body = await req.json();
-      const session = createSession(body);
+      const url = new URL(req.url);
+      const directory = url.searchParams.get('directory') || undefined;
+      const session = createSession(body, directory);
       return new Response(JSON.stringify(session), {
         status: 201,
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -594,6 +668,69 @@ async function handleRequest(req: Request): Promise<Response> {
     if (path === '/config' && method === 'GET') {
       return new Response(JSON.stringify({
         provider: { type: 'mock' },
+        theme: 'system',
+      }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Config PATCH endpoint
+    if (path === '/config' && method === 'PATCH') {
+      return new Response(JSON.stringify({
+        provider: { type: 'mock' },
+        theme: 'dark',
+      }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Global config endpoint
+    if (path === '/global/config' && method === 'GET') {
+      return new Response(JSON.stringify({
+        provider: { type: 'mock' },
+        theme: 'system',
+      }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Global config PATCH endpoint
+    if (path === '/global/config' && method === 'PATCH') {
+      return new Response(JSON.stringify({
+        provider: { type: 'mock' },
+        theme: 'dark',
+      }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Tool IDs endpoint
+    if (path === '/experimental/tool/ids' && method === 'GET') {
+      return new Response(JSON.stringify({
+        ids: ['tool-1', 'tool-2', 'tool-3'],
+      }), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Providers endpoint
+    if (path === '/config/providers' && method === 'GET') {
+      return new Response(JSON.stringify({
+        providers: [
+          {
+            id: 'mock',
+            name: 'Mock Provider',
+            configured: true,
+            models: {
+              'mock-gpt-4': {
+                name: 'Mock GPT-4',
+                limit: { context: 8192, output: 4096 },
+                cost: { input: 0.001, output: 0.002 },
+              },
+            },
+          },
+        ],
+        default: { provider: 'mock', model: 'mock-gpt-4' },
       }), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
@@ -604,6 +741,36 @@ async function handleRequest(req: Request): Promise<Response> {
       return new Response(JSON.stringify([
         { id: 'proj-1', name: 'Test Project', worktree: '/test' }
       ]), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Current project endpoint
+    if (path === '/project/current' && method === 'GET') {
+      return new Response(JSON.stringify(
+        { id: 'proj-1', name: 'Test Project', worktree: '/test' }
+      ), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Global dispose endpoint
+    if (path === '/global/dispose' && method === 'POST') {
+      return new Response(JSON.stringify(true), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Instance dispose endpoint
+    if (path === '/instance/dispose' && method === 'POST') {
+      return new Response(JSON.stringify(true), {
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Permissions endpoint
+    if (path === '/permission' && method === 'GET') {
+      return new Response(JSON.stringify([]), {
         headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }

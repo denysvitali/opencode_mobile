@@ -78,11 +78,7 @@ void main() {
       print('\n--- Step 4: Send message and wait for events ---');
 
       // Send message
-      final response = await client.sendMessage(
-        session.id,
-        text: 'test',
-      );
-      print('Message sent: ${response.id}');
+      await client.sendPrompt(session.id, text: 'test');
 
       // Wait for events (should receive message.updated)
       print('Waiting for SSE events...');
