@@ -94,8 +94,9 @@ class _OpenCodeAppState extends ConsumerState<OpenCodeApp> {
           name: 'sessions',
           builder: (context, state) {
             final projectId = state.uri.queryParameters['projectId'];
+            final directory = state.uri.queryParameters['directory'];
             return ConnectionGate(
-              child: SessionsScreen(projectId: projectId),
+              child: SessionsScreen(projectId: projectId, directory: directory),
             );
           },
         ),
@@ -104,8 +105,9 @@ class _OpenCodeAppState extends ConsumerState<OpenCodeApp> {
           name: 'chat',
           builder: (context, state) {
             final sessionId = state.pathParameters['sessionId']!;
+            final directory = state.uri.queryParameters['directory'];
             return ConnectionGate(
-              child: ChatScreen(sessionId: sessionId),
+              child: ChatScreen(sessionId: sessionId, directory: directory),
             );
           },
         ),

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../api/opencode_client.dart';
 import '../api/sse_client.dart';
@@ -86,11 +87,16 @@ class ChatNotifier extends Notifier<ChatState> {
     }
   }
 
+  Future<void> initSession(String sessionId, {String? directory}) async {
+    await OpenCodeClient().initSession(sessionId, directory: directory);
+  }
+
   Future<void> sendMessage(String sessionId, String text, {String? directory, String? providerID, String? modelID}) async {
     if (text.trim().isEmpty) return;
 
+    final pendingId = const Uuid().v4();
     final pendingMessage = PendingMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: pendingId,
       text: text,
       createdAt: DateTime.now(),
     );
@@ -101,6 +107,8 @@ class ChatNotifier extends Notifier<ChatState> {
     );
 
     try {
+      state = state.copyWith(isStreaming: true);
+      
       final response = await OpenCodeClient().sendPrompt(
         sessionId,
         text: text,
@@ -114,20 +122,19 @@ class ChatNotifier extends Notifier<ChatState> {
         },
       );
 
-      // Remove pending message and add server response
       final updatedPending = state.pendingMessages
-          .where((p) => p.id != pendingMessage.id)
+          .where((p) => p.id != pendingId)
           .toList();
 
       state = state.copyWith(
         pendingMessages: updatedPending,
         messages: [...state.messages, response],
         currentMessageId: response.id,
+        isStreaming: false,
       );
     } catch (e) {
-      // Mark pending message as failed
       final updatedPending = state.pendingMessages.map((p) {
-        if (p.id == pendingMessage.id) {
+        if (p.id == pendingId) {
           return p.copyWith(isSending: false, error: e.toString());
         }
         return p;
@@ -147,7 +154,6 @@ class ChatNotifier extends Notifier<ChatState> {
       orElse: () => throw Exception('Pending message not found'),
     );
 
-    // Reset to sending state
     final updatedPending = state.pendingMessages.map((p) {
       if (p.id == pendingId) {
         return p.copyWith(isSending: true, error: null);
@@ -155,10 +161,10 @@ class ChatNotifier extends Notifier<ChatState> {
       return p;
     }).toList();
 
-    state = state.copyWith(pendingMessages: updatedPending, error: null);
+    state = state.copyWith(pendingMessages: updatedPending, error: null, isStreaming: true);
 
     try {
-      final response = await OpenCodeClient().sendMessage(
+      final response = await OpenCodeClient().sendPrompt(
         sessionId,
         text: pendingMessage.text,
         directory: directory,
@@ -171,7 +177,6 @@ class ChatNotifier extends Notifier<ChatState> {
         },
       );
 
-      // Remove pending message and add server response
       final newPending = state.pendingMessages
           .where((p) => p.id != pendingId)
           .toList();
@@ -180,9 +185,9 @@ class ChatNotifier extends Notifier<ChatState> {
         pendingMessages: newPending,
         messages: [...state.messages, response],
         currentMessageId: response.id,
+        isStreaming: false,
       );
     } catch (e) {
-      // Mark as failed again
       final newPending = state.pendingMessages.map((p) {
         if (p.id == pendingId) {
           return p.copyWith(isSending: false, error: e.toString());
@@ -192,6 +197,7 @@ class ChatNotifier extends Notifier<ChatState> {
 
       state = state.copyWith(
         pendingMessages: newPending,
+        isStreaming: false,
         error: e.toString(),
       );
     }

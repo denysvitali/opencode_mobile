@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/sessions_provider.dart';
 
 class NewSessionDialog extends StatefulWidget {
-  const NewSessionDialog({super.key, required this.ref});
+  const NewSessionDialog({super.key, required this.ref, this.directory});
 
   final WidgetRef ref;
+  final String? directory;
 
   @override
   State<NewSessionDialog> createState() => _NewSessionDialogState();
@@ -19,7 +20,7 @@ class _NewSessionDialogState extends State<NewSessionDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final session = await widget.ref.read(sessionsProvider.notifier).createSession();
+      final session = await widget.ref.read(sessionsProvider.notifier).createSession(directory: widget.directory);
 
       if (mounted) {
         Navigator.of(context).pop(session);

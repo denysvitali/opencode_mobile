@@ -143,7 +143,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 key: Key('projectCard_${entry.key}'),
                 project: entry.value,
                 sessionCount: sessionCounts[entry.value.id] ?? 0,
-                onTap: () => context.push('/sessions?projectId=${entry.value.id}'),
+                onTap: () => context.push('/sessions?projectId=${entry.value.id}&directory=${Uri.encodeComponent(entry.value.worktree ?? '')}'),
               ),
             )),
           ],

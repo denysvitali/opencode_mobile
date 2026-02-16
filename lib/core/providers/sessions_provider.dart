@@ -34,13 +34,29 @@ class SessionsNotifier extends Notifier<SessionsState> {
     return SessionsState();
   }
 
+  List<Session> _sortSessions(List<Session> sessions) {
+    final sorted = List<Session>.from(sessions);
+    sorted.sort((a, b) {
+      final aTime = a.createdAt;
+      final bTime = b.createdAt;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return bTime.compareTo(aTime);
+    });
+    return sorted;
+  }
+
   Future<void> loadSessions({String? directory}) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
       final sessions = await OpenCodeClient().listSessions(directory: directory);
-      sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      state = state.copyWith(sessions: sessions, isLoading: false);
+      state = state.copyWith(
+        sessions: _sortSessions(sessions),
+        isLoading: false,
+        error: null,
+      );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -52,9 +68,8 @@ class SessionsNotifier extends Notifier<SessionsState> {
         directory: directory,
         input: title != null ? SessionCreateInput(title: title) : null,
       );
-      state = state.copyWith(
-        sessions: [session, ...state.sessions],
-      );
+      final newSessions = _sortSessions([session, ...state.sessions]);
+      state = state.copyWith(sessions: newSessions, error: null);
       return session;
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -67,27 +82,60 @@ class SessionsNotifier extends Notifier<SessionsState> {
       await OpenCodeClient().deleteSession(sessionId, directory: directory);
       state = state.copyWith(
         sessions: state.sessions.where((s) => s.id != sessionId).toList(),
+        error: null,
       );
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
-  void updateSession(Session updated) {
-    final index = state.sessions.indexWhere((s) => s.id == updated.id);
+  Future<void> initSession(String sessionId, {String? directory}) async {
+    try {
+      await OpenCodeClient().initSession(sessionId, directory: directory);
+      final updatedSession = await OpenCodeClient().getSession(sessionId, directory: directory);
+      updateSessionFromSSE(updatedSession);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  Future<void> updateSession(String sessionId, SessionUpdateInput input, {String? directory}) async {
+    try {
+      final updatedSession = await OpenCodeClient().updateSession(
+        sessionId,
+        input,
+        directory: directory,
+      );
+      final index = state.sessions.indexWhere((s) => s.id == sessionId);
+      if (index != -1) {
+        final newSessions = List<Session>.from(state.sessions);
+        newSessions[index] = updatedSession;
+        state = state.copyWith(sessions: newSessions, error: null);
+      }
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+      rethrow;
+    }
+  }
+
+  void updateSessionFromSSE(Session session) {
+    final index = state.sessions.indexWhere((s) => s.id == session.id);
     if (index != -1) {
       final newSessions = List<Session>.from(state.sessions);
-      newSessions[index] = updated;
+      newSessions[index] = session;
       state = state.copyWith(sessions: newSessions);
+    } else {
+      addSession(session);
     }
   }
 
   void addSession(Session session) {
     final exists = state.sessions.any((s) => s.id == session.id);
     if (!exists) {
-      state = state.copyWith(
-        sessions: [session, ...state.sessions],
-      );
+      final newSessions = _sortSessions([session, ...state.sessions]);
+      state = state.copyWith(sessions: newSessions);
     }
   }
 

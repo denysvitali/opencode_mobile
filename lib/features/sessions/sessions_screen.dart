@@ -11,38 +11,64 @@ import 'new_session_dialog.dart';
 
 class SessionsScreen extends ConsumerStatefulWidget {
   final String? projectId;
+  final String? directory;
 
-  const SessionsScreen({super.key, this.projectId});
+  const SessionsScreen({super.key, this.projectId, this.directory});
 
   @override
   ConsumerState<SessionsScreen> createState() => _SessionsScreenState();
 }
 
 class _SessionsScreenState extends ConsumerState<SessionsScreen> {
+  String? _worktree;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(sessionsProvider.notifier).loadSessions();
-      ref.read(projectsProvider.notifier).loadProjects();
+      _loadData();
     });
   }
 
+  Future<void> _loadData() async {
+    await ref.read(projectsProvider.notifier).loadProjects();
+    final projectsState = ref.read(projectsProvider);
+    final project = widget.projectId != null
+        ? projectsState.projectMap[widget.projectId]
+        : null;
+    _worktree = widget.directory ?? project?.worktree;
+    ref.read(sessionsProvider.notifier).loadSessions(directory: _worktree);
+  }
+
   Future<void> _refreshSessions() async {
-    await Future.wait([
-      ref.read(sessionsProvider.notifier).loadSessions(),
-      ref.read(projectsProvider.notifier).loadProjects(),
-    ]);
+    await ref.read(projectsProvider.notifier).loadProjects();
+    final projectsState = ref.read(projectsProvider);
+    final project = widget.projectId != null
+        ? projectsState.projectMap[widget.projectId]
+        : null;
+    _worktree = widget.directory ?? project?.worktree;
+    ref.read(sessionsProvider.notifier).loadSessions(directory: _worktree);
   }
 
   Future<void> _createSession() async {
+    final projectsState = ref.read(projectsProvider);
+    final project = widget.projectId != null
+        ? projectsState.projectMap[widget.projectId]
+        : null;
+    final worktree = widget.directory ?? project?.worktree;
+
     final session = await showDialog<Session>(
       context: context,
-      builder: (context) => NewSessionDialog(ref: ref),
+      builder: (context) => NewSessionDialog(ref: ref, directory: worktree),
     );
 
     if (session != null && mounted) {
-      context.push('/chat/${session.id}');
+      final worktree = widget.directory ?? project?.worktree;
+      if (worktree != null) {
+        context.push('/chat/${session.id}?directory=$worktree');
+      } else {
+        context.push('/chat/${session.id}');
+      }
     }
   }
 
@@ -102,11 +128,22 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     ref.listen(sseSessionUpdateProvider, (previous, next) {
       next.when(
         data: (session) {
-          ref.read(sessionsProvider.notifier).updateSession(session);
+          ref.read(sessionsProvider.notifier).updateSessionFromSSE(session);
         },
         loading: () {},
         error: (_, __) {},
       );
+    });
+
+    ref.listen(sessionsProvider, (previous, next) {
+      if (next.error != null && next.error != previous?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${next.error}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     });
 
     // Filter sessions by projectId if provided
@@ -192,7 +229,13 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
             return _SessionTile(
               key: Key('sessionTile_${session.id}'),
               session: session,
-              onTap: () => context.push('/chat/${session.id}'),
+              onTap: () {
+                if (widget.directory != null) {
+                  context.push('/chat/${session.id}?directory=${widget.directory}');
+                } else {
+                  context.push('/chat/${session.id}');
+                }
+              },
               onDelete: () => _deleteSession(session),
             );
           },
@@ -239,9 +282,17 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
             currentIndex++;
             if (index < currentIndex + groupSessions.length) {
               final session = groupSessions[index - currentIndex];
+              final project = session.projectID != null ? projectMap[session.projectID] : null;
+              final directory = widget.directory ?? project?.worktree;
               return _SessionTile(
                 session: session,
-                onTap: () => context.push('/chat/${session.id}'),
+                onTap: () {
+                  if (directory != null) {
+                    context.push('/chat/${session.id}?directory=$directory');
+                  } else {
+                    context.push('/chat/${session.id}');
+                  }
+                },
                 onDelete: () => _deleteSession(session),
               );
             }

@@ -12,8 +12,9 @@ import 'widgets/permission_banner.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String sessionId;
+  final String? directory;
 
-  const ChatScreen({super.key, required this.sessionId});
+  const ChatScreen({super.key, required this.sessionId, this.directory});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -26,7 +27,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(chatProvider.notifier).loadMessages(widget.sessionId);
+      ref.read(chatProvider.notifier).initSession(widget.sessionId, directory: widget.directory);
+      ref.read(chatProvider.notifier).loadMessages(widget.sessionId, directory: widget.directory);
       ref.read(permissionsProvider.notifier).loadPermissions();
     });
   }

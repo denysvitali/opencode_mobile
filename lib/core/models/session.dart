@@ -1,5 +1,11 @@
 import 'package:uuid/uuid.dart';
 
+class _Sentinel {
+  const _Sentinel();
+}
+
+const _sentinel = _Sentinel();
+
 enum SessionStatus {
   idle,
   pending,
@@ -132,33 +138,33 @@ class Session {
 
   Session copyWith({
     String? id,
-    String? parentID,
+    Object? parentID = _sentinel,
     String? title,
-    String? description,
+    Object? description = _sentinel,
     SessionStatus? status,
     DateTime? createdAt,
-    DateTime? completedAt,
-    DateTime? archivedAt,
+    Object? completedAt = _sentinel,
+    Object? archivedAt = _sentinel,
     String? summary,
     double? cost,
     String? path,
-    String? projectID,
-    PermissionRuleset? permission,
+    Object? projectID = _sentinel,
+    Object? permission = _sentinel,
   }) {
     return Session(
       id: id ?? this.id,
-      parentID: parentID ?? this.parentID,
+      parentID: identical(parentID, _sentinel) ? this.parentID : parentID as String?,
       title: title ?? this.title,
-      description: description ?? this.description,
+      description: identical(description, _sentinel) ? this.description : description as String?,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
-      completedAt: completedAt ?? this.completedAt,
-      archivedAt: archivedAt ?? this.archivedAt,
+      completedAt: identical(completedAt, _sentinel) ? this.completedAt : completedAt as DateTime?,
+      archivedAt: identical(archivedAt, _sentinel) ? this.archivedAt : archivedAt as DateTime?,
       summary: summary ?? this.summary,
       cost: cost ?? this.cost,
       path: path ?? this.path,
-      projectID: projectID ?? this.projectID,
-      permission: permission ?? this.permission,
+      projectID: identical(projectID, _sentinel) ? this.projectID : projectID as String?,
+      permission: identical(permission, _sentinel) ? this.permission : permission as PermissionRuleset?,
     );
   }
 
