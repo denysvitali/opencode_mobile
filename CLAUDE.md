@@ -47,11 +47,19 @@ flutter build appbundle --release        # Build Android App Bundle
 
 ### Integration Tests
 
-Integration tests live in `test/integration/` and require a running OpenCode server (start one with `cd ../opencode && go run ./cmd/opencode serve`). They are run as unit tests (not device tests) with `--dart-define`:
+Integration tests live in `test/integration/` and are run as unit tests (not device tests) with `--dart-define=SERVER_URL`. You can point them at a real server or at the Bun-based mock server in `test/mock_opencode_server.ts` (CI uses the mock):
 
 ```bash
+# Option 1: use the mock server (requires Bun)
+bun run test/mock_opencode_server.ts &
+flutter test --dart-define=SERVER_URL=http://localhost:4096 test/integration/
+
+# Option 2: use a real server
+cd ../opencode && go run ./cmd/opencode serve &
 flutter test --dart-define=SERVER_URL=http://localhost:4096 test/integration/
 ```
+
+`integration_test/` (top-level) contains Flutter device integration tests that run on a real device via `flutter test integration_test/`. These are separate from `test/integration/`.
 
 ## Architecture
 
