@@ -27,7 +27,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(chatProvider.notifier).initSession(widget.sessionId, directory: widget.directory);
       ref.read(chatProvider.notifier).loadMessages(widget.sessionId, directory: widget.directory);
       ref.read(permissionsProvider.notifier).loadPermissions();
     });

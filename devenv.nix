@@ -9,6 +9,10 @@
 
   android.enable = false;
 
+  env = {
+    DART_SDK = "${pkgs.flutter.out}/bin/cache/dart-sdk";
+  };
+
   enterShell = ''
     echo "Flutter version:"
     flutter --version

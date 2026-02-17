@@ -109,4 +109,15 @@ class SessionDiff {
       totalDeletions: diffs.fold(0, (sum, f) => sum + f.deletions),
     );
   }
+
+  factory SessionDiff.fromList(List<dynamic> list) {
+    final diffs = list
+        .map((f) => FileDiff.fromJson(f as Map<String, dynamic>))
+        .toList();
+    return SessionDiff(
+      files: diffs,
+      totalAdditions: diffs.fold(0, (sum, f) => sum + f.additions),
+      totalDeletions: diffs.fold(0, (sum, f) => sum + f.deletions),
+    );
+  }
 }

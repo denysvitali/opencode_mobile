@@ -32,13 +32,33 @@ class MessagePart {
   }) : id = id ?? const Uuid().v4();
 
   factory MessagePart.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic>? toolData;
+
+    if (json['type'] == 'tool') {
+      final state = json['state'];
+      if (state is Map) {
+        // New format: {type: "tool", tool: "name", callID: "...", state: {status, input, output, ...}}
+        toolData = {
+          'name': json['tool'] as String? ?? '',
+          'state': (state['status'] as String?) ?? 'pending',
+          'input': state['input']?.toString(),
+          'output': state['output']?.toString(),
+          'callID': json['callID'] as String?,
+          'title': state['title'] as String?,
+        };
+      } else if (json['tool'] is Map) {
+        // Old format: {type: "tool", tool: {name, state, input, output}}
+        toolData = json['tool'] as Map<String, dynamic>;
+      }
+    }
+
     return MessagePart(
       id: json['id'] as String?,
       type: _parseType(json['type'] as String?),
       text: json['text'] as String?,
-      toolData: json['tool'] is Map ? json['tool'] as Map<String, dynamic> : null,
+      toolData: toolData,
       fileData: json['file'] as Map<String, dynamic>?,
-      error: json['error'] as String?,
+      error: json['error'] is String ? json['error'] as String : null,
     );
   }
 
@@ -103,29 +123,33 @@ class Message {
         parts = parts ?? [];
 
   factory Message.fromJson(Map<String, dynamic> json) {
+    // Support both new nested format {info: {...}, parts: [...]}
+    // and old flat format for backward compatibility
+    final info = json['info'] as Map<String, dynamic>? ?? json;
     final partsList = json['parts'] as List<dynamic>? ?? [];
+    final time = info['time'] as Map<String, dynamic>?;
     return Message(
-      id: json['id'] as String?,
-      sessionId: json['sessionID'] as String? ?? json['sessionId'] as String? ?? '',
-      role: json['role'] == 'assistant' ? MessageRole.assistant : MessageRole.user,
-      createdAt: json['time'] != null
+      id: info['id'] as String?,
+      sessionId: info['sessionID'] as String? ?? info['sessionId'] as String? ?? json['sessionID'] as String? ?? '',
+      role: info['role'] == 'assistant' ? MessageRole.assistant : MessageRole.user,
+      createdAt: time != null && time['created'] != null
           ? DateTime.fromMillisecondsSinceEpoch(
-              (json['time']['created'] as num).toInt())
+              (time['created'] as num).toInt())
           : null,
-      completedAt: json['time'] != null && json['time']['completed'] != null
+      completedAt: time != null && time['completed'] != null
           ? DateTime.fromMillisecondsSinceEpoch(
-              (json['time']['completed'] as num).toInt())
+              (time['completed'] as num).toInt())
           : null,
       parts: partsList
           .map((p) => MessagePart.fromJson(p as Map<String, dynamic>))
           .toList(),
-      parentMessageId: json['parentID'] as String?,
-      modelId: json['modelID'] as String?,
-      providerId: json['providerID'] as String?,
-      cost: (json['cost'] as num?)?.toDouble(),
-      tokens: json['tokens'] as Map<String, dynamic>?,
-      error: json['error']?['message'] as String?,
-      finishReason: json['finish'] as String?,
+      parentMessageId: info['parentID'] as String?,
+      modelId: info['modelID'] as String?,
+      providerId: info['providerID'] as String?,
+      cost: (info['cost'] as num?)?.toDouble(),
+      tokens: info['tokens'] as Map<String, dynamic>?,
+      error: info['error'] is Map ? (info['error'] as Map)['message'] as String? : null,
+      finishReason: info['finish'] as String?,
     );
   }
 

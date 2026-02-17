@@ -364,12 +364,19 @@ class OpenCodeClient {
     throw OpenCodeException('Failed to init session: ${response.statusCode}');
   }
 
-  Future<SessionDiff> getSessionDiff(String sessionId, {String? directory}) async {
-    final queryParams = directory != null ? {'directory': directory} : null;
-    final response = await _get('/session/${_encodePathSegment(sessionId)}/diff', queryParams: queryParams);
+  Future<SessionDiff> getSessionDiff(String sessionId, {String? directory, String? messageId}) async {
+    final queryParams = <String, String>{};
+    if (directory != null) queryParams['directory'] = directory;
+    if (messageId != null) queryParams['messageID'] = messageId;
+    final response = await _get('/session/${_encodePathSegment(sessionId)}/diff',
+        queryParams: queryParams.isEmpty ? null : queryParams);
     if (_isSuccess(response.statusCode)) {
       try {
-        return SessionDiff.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+        final decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          return SessionDiff.fromList(decoded);
+        }
+        return SessionDiff.fromJson(decoded as Map<String, dynamic>);
       } catch (e) {
         throw OpenCodeException('Failed to parse diff response: $e');
       }
@@ -379,7 +386,9 @@ class OpenCodeClient {
 
   Future<Session> revertToMessage(String sessionId, String messageId, {String? directory}) async {
     final queryParams = directory != null ? {'directory': directory} : null;
-    final response = await _get('/session/${_encodePathSegment(sessionId)}/revert/${_encodePathSegment(messageId)}', queryParams: queryParams);
+    final body = {'messageID': messageId};
+    final response = await _post('/session/${_encodePathSegment(sessionId)}/revert',
+        queryParams: queryParams, body: body);
     if (_isSuccess(response.statusCode)) {
       try {
         return Session.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
@@ -430,11 +439,15 @@ class OpenCodeClient {
     final response = await _post('/session/${_encodePathSegment(sessionId)}/message', queryParams: queryParams, body: body);
     if (_isSuccess(response.statusCode)) {
       if (response.body.isEmpty) {
-        throw OpenCodeException('Empty response from server');
+        // Server accepted message but returned no body (async mode).
+        // Real message updates arrive via SSE events.
+        return Message(sessionId: sessionId, role: MessageRole.user, parts: []);
       }
       try {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        json['sessionID'] = sessionId;
+        if (!json.containsKey('sessionID')) {
+          json['sessionID'] = sessionId;
+        }
         return Message.fromJson(json);
       } catch (e) {
         throw OpenCodeException('Failed to parse response: $e');
@@ -515,7 +528,7 @@ class OpenCodeClient {
 
   Future<bool> cancelSession(String sessionId, {String? directory}) async {
     final queryParams = directory != null ? {'directory': directory} : null;
-    final response = await _post('/session/${_encodePathSegment(sessionId)}/cancel', queryParams: queryParams);
+    final response = await _post('/session/${_encodePathSegment(sessionId)}/abort', queryParams: queryParams);
     if (_isSuccess(response.statusCode)) {
       try {
         return jsonDecode(response.body) as bool? ?? true;

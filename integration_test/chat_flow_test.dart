@@ -56,8 +56,8 @@ void main() {
 
     // Verify we're past the connection screen (look for sessions-related UI or error)
     // The app should either show sessions or show an error
-    final hasError = find.byType(Card).evaluate().any((widget) {
-      final card = widget as Card;
+    final hasError = find.byType(Card).evaluate().any((element) {
+      final card = element.widget as Card;
       return card.color != null &&
           card.color!.computeLuminance() < 0.5; // Error cards are typically red
     });

@@ -340,15 +340,18 @@ class SSEClient {
         case 'message.updated':
           final info = extractInfo(payload);
           if (info?.containsKey('info') == true) {
-            final msg = Message.fromJson(info!['info'] as Map<String, dynamic>);
+            // Pass the full {info, parts} structure to Message.fromJson
+            final msg = Message.fromJson(info!);
             _messageUpdateController.add(msg);
           }
           break;
 
         case 'message.part.updated':
+        case 'message.part.delta':
           final info = extractInfo(payload);
           if (info?.containsKey('info') == true) {
-            final msg = Message.fromJson(info!['info'] as Map<String, dynamic>);
+            // Pass the full {info, parts} structure to Message.fromJson
+            final msg = Message.fromJson(info!);
             _messagePartUpdateController.add(msg);
           }
           break;

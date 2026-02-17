@@ -100,7 +100,7 @@ class Session {
       cost: (json['cost'] as num?)?.toDouble(),
       path: json['path']?['cwd'] as String? ?? '',
       projectID: json['projectID'] as String?,
-      permission: json['permission'] != null
+      permission: json['permission'] is Map
           ? PermissionRuleset.fromJson(json['permission'] as Map<String, dynamic>)
           : null,
     );
