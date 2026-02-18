@@ -87,6 +87,62 @@ void main() {
         expect(session.path, '');
       });
 
+      test('handles path as string format', () {
+        final json = {
+          'id': 'test-id',
+          'path': '/simple/path',
+        };
+        final session = Session.fromJson(json);
+        expect(session.path, '/simple/path');
+      });
+
+      test('handles worktree field', () {
+        final json = {
+          'id': 'test-id',
+          'worktree': '/worktree/path',
+        };
+        final session = Session.fromJson(json);
+        expect(session.path, '/worktree/path');
+      });
+
+      test('handles directory field', () {
+        final json = {
+          'id': 'test-id',
+          'directory': '/directory/path',
+        };
+        final session = Session.fromJson(json);
+        expect(session.path, '/directory/path');
+      });
+
+      test('path.cwd takes precedence over worktree', () {
+        final json = {
+          'id': 'test-id',
+          'path': {'cwd': '/from/cwd'},
+          'worktree': '/from/worktree',
+        };
+        final session = Session.fromJson(json);
+        expect(session.path, '/from/cwd');
+      });
+
+      test('worktree takes precedence over directory', () {
+        final json = {
+          'id': 'test-id',
+          'worktree': '/from/worktree',
+          'directory': '/from/directory',
+        };
+        final session = Session.fromJson(json);
+        expect(session.path, '/from/worktree');
+      });
+
+      test('handles path.path nested field', () {
+        final json = {
+          'id': 'test-id',
+          'path': {'path': '/nested/path'},
+        };
+        final session = Session.fromJson(json);
+        expect(session.path, '/nested/path');
+      });
+
       test('handles parentID', () {
         final json = {
           'id': 'child-session',
