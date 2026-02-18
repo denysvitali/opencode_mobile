@@ -43,8 +43,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     }
   }
 
-  int _getSessionCountForProject(String projectId, List<Session> sessions) {
-    return sessions.where((s) => s.projectID == projectId).length;
+  int _getSessionCountForProject(Project project, List<Session> sessions) {
+    // Match sessions by path/worktree since projectID may not be populated
+    final worktree = project.worktree;
+    if (worktree == null || worktree.isEmpty) return 0;
+    return sessions.where((s) => s.path == worktree).length;
   }
 
   @override
@@ -97,7 +100,7 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     // Calculate session counts
     final sessionCounts = <String, int>{};
     for (final project in projects) {
-      sessionCounts[project.id] = _getSessionCountForProject(project.id, sessions);
+      sessionCounts[project.id] = _getSessionCountForProject(project, sessions);
     }
 
     final totalSessions = sessions.length;
