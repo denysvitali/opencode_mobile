@@ -66,13 +66,13 @@ void main() {
       expect(find.textContaining('Second part'), findsOneWidget);
     });
 
-    testWidgets('displays reasoning part', (tester) async {
+    testWidgets('displays reasoning part with expand/collapse', (tester) async {
       final message = Message(
         id: 'msg-1',
         sessionId: 'session-1',
         role: MessageRole.assistant,
         parts: [
-          MessagePart(type: MessagePartType.reasoning, text: 'Thinking...'),
+          MessagePart(type: MessagePartType.reasoning, text: 'Let me analyze this step by step.'),
           MessagePart(type: MessagePartType.text, text: 'Final answer.'),
         ],
       );
@@ -80,13 +80,33 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: MessageBubble(message: message),
+            body: SingleChildScrollView(
+              child: MessageBubble(message: message),
+            ),
           ),
         ),
       );
 
+      // Header should be visible
       expect(find.text('Thinking...'), findsOneWidget);
+      // Content should be hidden (collapsed by default)
+      expect(find.text('Let me analyze this step by step.'), findsNothing);
+      // Text part should be visible
       expect(find.text('Final answer.'), findsOneWidget);
+
+      // Tap to expand
+      await tester.tap(find.text('Thinking...'));
+      await tester.pumpAndSettle();
+
+      // Content should now be visible
+      expect(find.text('Let me analyze this step by step.'), findsOneWidget);
+
+      // Tap again to collapse
+      await tester.tap(find.text('Thinking...'));
+      await tester.pumpAndSettle();
+
+      // Content should be hidden again
+      expect(find.text('Let me analyze this step by step.'), findsNothing);
     });
 
     testWidgets('displays error message', (tester) async {

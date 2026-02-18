@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/api/sse_client.dart';
 import '../../core/models/session.dart';
 import '../../core/models/project.dart';
 import '../../core/providers/sessions_provider.dart';
@@ -36,8 +37,20 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     final project = widget.projectId != null
         ? projectsState.projectMap[widget.projectId]
         : null;
-    _worktree = widget.directory ?? project?.worktree;
+    final dir = widget.directory;
+    _worktree = (dir != null && dir.isNotEmpty) ? dir : project?.worktree;
+    if (_worktree != null && _worktree!.isNotEmpty) {
+      SSEClient().connectProject(_worktree!);
+    }
     ref.read(sessionsProvider.notifier).loadSessions(directory: _worktree);
+  }
+
+  @override
+  void dispose() {
+    if (_worktree != null && _worktree!.isNotEmpty) {
+      SSEClient().disconnectProject(_worktree!);
+    }
+    super.dispose();
   }
 
   Future<void> _refreshSessions() async {
@@ -46,7 +59,8 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     final project = widget.projectId != null
         ? projectsState.projectMap[widget.projectId]
         : null;
-    _worktree = widget.directory ?? project?.worktree;
+    final dir = widget.directory;
+    _worktree = (dir != null && dir.isNotEmpty) ? dir : project?.worktree;
     ref.read(sessionsProvider.notifier).loadSessions(directory: _worktree);
   }
 
@@ -55,7 +69,8 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     final project = widget.projectId != null
         ? projectsState.projectMap[widget.projectId]
         : null;
-    final worktree = widget.directory ?? project?.worktree;
+    final dir = widget.directory;
+    final worktree = (dir != null && dir.isNotEmpty) ? dir : project?.worktree;
 
     final session = await showDialog<Session>(
       context: context,
@@ -65,7 +80,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
     if (session != null && mounted) {
       final worktree = widget.directory ?? project?.worktree;
       if (worktree != null) {
-        context.push('/chat/${session.id}?directory=$worktree');
+        context.push('/chat/${session.id}?directory=${Uri.encodeComponent(worktree)}');
       } else {
         context.push('/chat/${session.id}');
       }
@@ -146,12 +161,15 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
       }
     });
 
-    // Filter sessions by projectId if provided
-    final filteredSessions = widget.projectId != null
+    // When directory is provided, the server already filters by directory,
+    // so skip the client-side projectID filter to avoid double-filtering.
+    final filteredSessions = (widget.directory != null && widget.directory!.isNotEmpty)
         ? sessionsState.sessions
-            .where((s) => s.projectID == widget.projectId)
-            .toList()
-        : sessionsState.sessions;
+        : widget.projectId != null
+            ? sessionsState.sessions
+                .where((s) => s.projectID == widget.projectId)
+                .toList()
+            : sessionsState.sessions;
 
     // Get project name for title if filtering by project
     final projectName = widget.projectId != null
@@ -231,7 +249,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
               session: session,
               onTap: () {
                 if (widget.directory != null) {
-                  context.push('/chat/${session.id}?directory=${widget.directory}');
+                  context.push('/chat/${session.id}?directory=${Uri.encodeComponent(widget.directory!)}');
                 } else {
                   context.push('/chat/${session.id}');
                 }
@@ -288,7 +306,7 @@ class _SessionsScreenState extends ConsumerState<SessionsScreen> {
                 session: session,
                 onTap: () {
                   if (directory != null) {
-                    context.push('/chat/${session.id}?directory=$directory');
+                    context.push('/chat/${session.id}?directory=${Uri.encodeComponent(directory)}');
                   } else {
                     context.push('/chat/${session.id}');
                   }

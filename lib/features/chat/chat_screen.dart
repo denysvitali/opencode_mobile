@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/sse_client.dart';
 import '../../core/providers/chat_provider.dart';
 import '../../core/providers/model_selection_provider.dart';
 import '../../core/providers/sessions_provider.dart';
@@ -27,6 +28,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.directory != null && widget.directory!.isNotEmpty) {
+        SSEClient().connectProject(widget.directory!);
+      }
       ref.read(chatProvider.notifier).loadMessages(widget.sessionId, directory: widget.directory);
       ref.read(permissionsProvider.notifier).loadPermissions();
     });
@@ -34,6 +38,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
+    if (widget.directory != null && widget.directory!.isNotEmpty) {
+      SSEClient().disconnectProject(widget.directory!);
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -74,8 +81,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ref.read(chatProvider.notifier).removePendingMessage(pendingId);
   }
 
-  String _getSessionTitle() {
-    final sessionsState = ref.read(sessionsProvider);
+  String _getSessionTitle(SessionsState sessionsState) {
     final session = sessionsState.sessions
         .where((s) => s.id == widget.sessionId)
         .firstOrNull;
@@ -86,7 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
     // Watch sessions to reactively update title
-    ref.watch(sessionsProvider);
+    final sessionsState = ref.watch(sessionsProvider);
 
     ref.listen(sseMessageProvider, (previous, next) {
       next.when(
@@ -116,7 +122,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_getSessionTitle()),
+        title: Text(_getSessionTitle(sessionsState)),
         actions: [
           if (chatState.isStreaming)
             IconButton(

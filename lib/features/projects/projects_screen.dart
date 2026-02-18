@@ -6,7 +6,6 @@ import '../../core/models/project.dart';
 import '../../core/models/session.dart';
 import '../../core/providers/sessions_provider.dart';
 import '../../core/providers/project_provider.dart';
-import '../sessions/sessions_screen.dart';
 import '../sessions/new_session_dialog.dart';
 
 class ProjectsScreen extends ConsumerStatefulWidget {
@@ -53,25 +52,20 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
     final projectsState = ref.watch(projectsProvider);
     final sessionsState = ref.watch(sessionsProvider);
 
-    // Listen to SSE session events for real-time updates
-    ref.listen(sseSessionCreatedProvider, (previous, next) {
-      next.when(
-        data: (session) {
-          ref.read(sessionsProvider.notifier).addSession(session);
-        },
-        loading: () {},
-        error: (_, __) {},
-      );
+    ref.listen(projectsProvider, (prev, next) {
+      if (next.error != null && next.error != prev?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.error!)),
+        );
+      }
     });
 
-    ref.listen(sseSessionDeletedProvider, (previous, next) {
-      next.when(
-        data: (sessionId) {
-          ref.read(sessionsProvider.notifier).removeSession(sessionId);
-        },
-        loading: () {},
-        error: (_, __) {},
-      );
+    ref.listen(sessionsProvider, (prev, next) {
+      if (next.error != null && next.error != prev?.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.error!)),
+        );
+      }
     });
 
     return Scaffold(
@@ -122,7 +116,11 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
           _AllSessionsCard(
             key: const Key('allSessionsCard'),
             sessionCount: totalSessions,
-            onTap: () => context.push('/sessions'),
+            onTap: () {
+              context.push('/sessions').then((_) {
+                ref.read(sessionsProvider.notifier).loadSessions();
+              });
+            },
           ),
           const SizedBox(height: 16),
           // Projects header
@@ -143,7 +141,15 @@ class _ProjectsScreenState extends ConsumerState<ProjectsScreen> {
                 key: Key('projectCard_${entry.key}'),
                 project: entry.value,
                 sessionCount: sessionCounts[entry.value.id] ?? 0,
-                onTap: () => context.push('/sessions?projectId=${entry.value.id}&directory=${Uri.encodeComponent(entry.value.worktree ?? '')}'),
+                onTap: () {
+                  final worktree = entry.value.worktree;
+                  final url = worktree != null && worktree.isNotEmpty
+                      ? '/sessions?projectId=${entry.value.id}&directory=${Uri.encodeComponent(worktree)}'
+                      : '/sessions?projectId=${entry.value.id}';
+                  context.push(url).then((_) {
+                    ref.read(sessionsProvider.notifier).loadSessions();
+                  });
+                },
               ),
             )),
           ],
