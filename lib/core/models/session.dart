@@ -98,12 +98,33 @@ class Session {
           : null,
       summary: json['summary'] is String ? json['summary'] as String : json['summary']?.toString(),
       cost: (json['cost'] as num?)?.toDouble(),
-      path: json['path']?['cwd'] as String? ?? '',
+      path: _extractPath(json),
       projectID: json['projectID'] as String?,
       permission: json['permission'] is Map
           ? PermissionRuleset.fromJson(json['permission'] as Map<String, dynamic>)
           : null,
     );
+  }
+
+  static String _extractPath(Map<String, dynamic> json) {
+    // Try different path formats that servers might return
+    // Format 1: { path: { cwd: "/path" } } - Mock server and newer OpenCode
+    final pathObj = json['path'];
+    if (pathObj is Map) {
+      final cwd = pathObj['cwd'];
+      if (cwd is String && cwd.isNotEmpty) return cwd;
+      final path = pathObj['path'];
+      if (path is String && path.isNotEmpty) return path;
+    }
+    // Format 2: { path: "/path" } - Simple string path
+    if (pathObj is String && pathObj.isNotEmpty) return pathObj;
+    // Format 3: { worktree: "/path" } - Alternative field name
+    final worktree = json['worktree'];
+    if (worktree is String && worktree.isNotEmpty) return worktree;
+    // Format 4: { directory: "/path" } - Another alternative
+    final directory = json['directory'];
+    if (directory is String && directory.isNotEmpty) return directory;
+    return '';
   }
 
   static SessionStatus _parseStatus(String? status) {
